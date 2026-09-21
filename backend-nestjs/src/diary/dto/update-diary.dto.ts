@@ -1,0 +1,55 @@
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsDateString,
+  IsNumber,
+  IsIn,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
+
+const MOOD_VALUES = [
+  'peaceful',
+  'amazed',
+  'miss',
+  'relieved',
+  'expect',
+  'reluctant',
+  'free',
+  'healed',
+] as const;
+
+export class UpdateDiaryDto {
+  @IsOptional()
+  @IsDateString({}, { message: '日期格式不正确，应为 yyyy-MM-dd' })
+  date?: string;
+
+  @IsOptional()
+  @IsString({ message: '标题必须是字符串' })
+  @IsNotEmpty({ message: '标题不能为空' })
+  @MinLength(1, { message: '标题不能为空' })
+  @MaxLength(50, { message: '标题不能超过50个字符' })
+  title?: string;
+
+  @IsOptional()
+  @IsString({ message: '正文必须是字符串' })
+  content?: string;
+
+  @IsOptional()
+  @IsIn(MOOD_VALUES, { message: '心情值不合法' })
+  mood?: typeof MOOD_VALUES[number];
+
+  @IsOptional()
+  @IsString({ message: '位置名称必须是字符串' })
+  @MaxLength(200, { message: '位置名称不能超过200个字符' })
+  locationName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+}

@@ -10,6 +10,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// 旅程状态：进行中 / 已封存
+enum JourneyStatus {
+  ongoing
+  archived
+}
+
+/// 心情枚举（8 种）
+enum Mood {
+  peaceful
+  amazed
+  miss
+  relieved
+  expect
+  reluctant
+  free
+  healed
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   username  String    @unique @db.VarChar(50)
@@ -19,5 +37,109 @@ model User {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
+  journeys     Journey[]
+  copywritings Copywriting[]
+
   @@map("users")
+}
+
+model Journey {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @map("user_id")
+  title        String        @db.VarChar(200)
+  coverImage   String?       @db.VarChar(500) @map("cover_image")
+  destinations Json          @default("[]")
+  startDate    DateTime      @map("start_date") @db.Date
+  endDate      DateTime      @map("end_date") @db.Date
+  status       JourneyStatus @default(ongoing)
+  isPublic     Boolean       @default(false) @map("is_public")
+  tags         Json          @default("[]")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  diaries Diary[]
+  photos  Photo[]
+  copywritings Copywriting[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([startDate])
+  @@map("journeys")
+}
+
+model Diary {
+  id          Int      @id @default(autoincrement())
+  journeyId   Int      @map("journey_id")
+  date        DateTime @db.Date
+  title       String   @db.VarChar(200)
+  content     String   @db.Text
+  mood        Mood?
+  locationName String? @db.VarChar(200) @map("location_name")
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  journey Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  photos  Photo[]
+
+  @@index([journeyId])
+  @@index([date])
+  @@index([mood])
+  @@map("diaries")
+}
+
+model Photo {
+  id           Int       @id @default(autoincrement())
+  journeyId    Int       @map("journey_id")
+  diaryId      Int?      @map("diary_id")
+  originalUrl  String    @db.VarChar(500) @map("original_url")
+  thumbnailUrl String    @db.VarChar(500) @map("thumbnail_url")
+  width        Int?
+  height       Int?
+  fileSize     Int?      @map("file_size")
+  exifTakenAt  DateTime? @map("exif_taken_at")
+  latitude     Decimal?  @db.Decimal(10, 7)
+  longitude    Decimal?  @db.Decimal(10, 7)
+  aiSceneTags  Json?     @map("ai_scene_tags")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  journey Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  diary   Diary?  @relation(fields: [diaryId], references: [id], onDelete: SetNull)
+  copywritings Copywriting[]
+
+  @@index([journeyId])
+  @@index([diaryId])
+  @@map("photos")
+}
+
+model Copywriting {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  photoId          Int?     @map("photo_id")
+  journeyId        Int      @map("journey_id")
+  sceneTag         String   @db.VarChar(50) @map("scene_tag")
+  mood             Mood?
+  shortVersion     String   @map("short_version") @db.Text
+  narrativeVersion String   @map("narrative_version") @db.Text
+  poeticVersion    String   @map("poetic_version") @db.Text
+  finalVersion     String   @map("final_version") @db.Text
+  isPublic         Boolean  @default(false) @map("is_public")
+  likesCount       Int      @default(0) @map("likes_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photo   Photo?  @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  journey Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([photoId])
+  @@index([journeyId])
+  @@index([sceneTag])
+  @@index([mood])
+  @@index([isPublic])
+  @@map("copywritings")
 }

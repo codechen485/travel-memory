@@ -1,10 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // 启用 CORS
   app.enableCors({
@@ -21,6 +23,11 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // 静态资源服务：/uploads → 项目根目录 uploads 文件夹（照片原图与缩略图）
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // 全局异常过滤器
   app.useGlobalFilters(new AllExceptionsFilter());

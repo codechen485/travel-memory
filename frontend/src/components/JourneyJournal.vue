@@ -1,0 +1,529 @@
+<template>
+  <div class="journal-container">
+    <!-- 书本 -->
+    <div class="book-viewport">
+      <Transition :name="flipDirection === 'next' ? 'flip-next' : 'flip-prev'">
+        <div v-if="spreads.length > 0" :key="currentSpread" class="spread">
+          <!-- 封面 -->
+          <template v-if="current.type === 'cover'">
+            <div class="page cover-page" :style="coverStyle">
+              <div class="cover-overlay"></div>
+              <div class="cover-content">
+                <span class="cover-badge">TRAVEL JOURNAL</span>
+                <h2 class="cover-title">{{ journey.title }}</h2>
+                <p class="cover-meta">{{ journey.destinations.join(' · ') }}</p>
+                <p class="cover-meta">{{ formatDate(journey.startDate) }} — {{ formatDate(journey.endDate) }}</p>
+              </div>
+            </div>
+            <div class="page blank-page"></div>
+          </template>
+
+          <!-- 日记跨页：左照片 右文字 -->
+          <template v-else-if="current.type === 'diary' && current.diary">
+            <div class="page photo-page">
+              <div v-if="diaryPhotos(current.diary).length > 0" class="photo-wall">
+                <div
+                  v-for="(photo, index) in diaryPhotos(current.diary)"
+                  :key="photo.id"
+                  class="polaroid"
+                  :style="{ transform: `rotate(${index % 2 === 0 ? -2.5 : 2}deg)` }"
+                >
+                  <img :src="photo.thumbnailUrl || photo.originalUrl" alt="照片" loading="lazy" />
+                </div>
+              </div>
+              <div v-else class="no-photo">
+                <n-empty description="这一天没有照片">
+                  <template #icon>
+                    <n-icon :component="ImageOutline" :size="36" color="#D4E2D4" />
+                  </template>
+                </n-empty>
+              </div>
+            </div>
+
+            <div class="page text-page">
+              <div class="page-date">
+                {{ formatShortDate(current.diary.date) }} {{ formatWeekday(current.diary.date) }}
+              </div>
+              <h3 class="page-title">{{ current.diary.title }}</h3>
+              <div v-if="current.diary.mood" class="page-mood">
+                <n-icon :component="getMoodOption(current.diary.mood)?.icon" :size="14" />
+                {{ getMoodLabel(current.diary.mood) }}
+              </div>
+              <p class="page-content">{{ stripHtml(current.diary.content, 400) }}</p>
+              <div v-if="current.diary.locationName" class="page-location">
+                <n-icon :component="LocationOutline" :size="12" />
+                {{ current.diary.locationName }}
+              </div>
+              <div v-if="current.copywriting" class="page-copywriting">
+                <span class="copywriting-quote">“</span>
+                <p>{{ current.copywriting.finalVersion }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- 封底 -->
+          <template v-else>
+            <div class="page text-page end-page">
+              <div class="end-stats">
+                <div class="end-stat">
+                  <span class="end-value">{{ dayCount }}</span>
+                  <span class="end-label">天</span>
+                </div>
+                <div class="end-stat">
+                  <span class="end-value">{{ diaries.length }}</span>
+                  <span class="end-label">篇日记</span>
+                </div>
+                <div class="end-stat">
+                  <span class="end-value">{{ photoCount }}</span>
+                  <span class="end-label">张照片</span>
+                </div>
+                <div class="end-stat">
+                  <span class="end-value">{{ copywritings.length }}</span>
+                  <span class="end-label">段文案</span>
+                </div>
+              </div>
+              <p class="end-quote">这段旅程，已被好好安放。</p>
+            </div>
+            <div class="page blank-page"></div>
+          </template>
+        </div>
+      </Transition>
+    </div>
+
+    <!-- 翻页控制 -->
+    <div class="journal-controls">
+      <n-button quaternary :disabled="currentSpread === 0" @click="flipTo(currentSpread - 1)">
+        <template #icon>
+          <n-icon :component="ChevronBackOutline" />
+        </template>
+        上一页
+      </n-button>
+      <span class="journal-page-num">{{ currentSpread + 1 }} / {{ spreads.length }}</span>
+      <n-button
+        quaternary
+        :disabled="currentSpread >= spreads.length - 1"
+        @click="flipTo(currentSpread + 1)"
+      >
+        下一页
+        <template #icon>
+          <n-icon :component="ChevronForwardOutline" />
+        </template>
+      </n-button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { NButton, NEmpty, NIcon } from 'naive-ui'
+import {
+  ChevronBackOutline,
+  ChevronForwardOutline,
+  ImageOutline,
+  LocationOutline,
+} from '@vicons/ionicons5'
+import type { JourneyDetail } from '@/api/journey'
+import type { Diary } from '@/api/diary'
+import type { Copywriting } from '@/api/copywriting'
+import { getMyCopywritings } from '@/api/copywriting'
+import { getMoodLabel, getMoodOption } from '@/utils/mood'
+import {
+  daysBetween,
+  formatDate,
+  formatShortDate,
+  formatWeekday,
+  getCoverGradient,
+  stripHtml,
+} from '@/utils/format'
+
+const props = defineProps<{
+  journey: JourneyDetail
+}>()
+
+const copywritings = ref<Copywriting[]>([])
+const currentSpread = ref(0)
+const flipDirection = ref<'next' | 'prev'>('next')
+
+/** 日记（按日期升序，手帐翻阅顺序） */
+const diaries = computed<Diary[]>(() => {
+  if (!props.journey?.diaries) return []
+  return [...props.journey.diaries].sort((a, b) => (a.date > b.date ? 1 : -1))
+})
+
+const dayCount = computed(() =>
+  props.journey ? daysBetween(props.journey.startDate, props.journey.endDate) : 0,
+)
+
+const photoCount = computed(() =>
+  diaries.value.reduce((sum, diary) => sum + (diary.photos?.length ?? 0), 0),
+)
+
+const coverStyle = computed(() => {
+  if (props.journey.coverImage) {
+    return {
+      backgroundImage: `url(${props.journey.coverImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  return { background: getCoverGradient(props.journey.id) }
+})
+
+interface JournalSpread {
+  type: 'cover' | 'diary' | 'end'
+  diary?: Diary
+  copywriting?: Copywriting
+}
+
+/** 手帐页：封面 → 每篇日记一跨页 → 封底 */
+const spreads = computed<JournalSpread[]>(() => {
+  const result: JournalSpread[] = [{ type: 'cover' }]
+  for (const diary of diaries.value) {
+    result.push({ type: 'diary', diary, copywriting: findCopywriting(diary) })
+  }
+  result.push({ type: 'end' })
+  return result
+})
+
+const current = computed<JournalSpread>(
+  () => spreads.value[currentSpread.value] ?? { type: 'cover' },
+)
+
+/** 日记的照片 */
+function diaryPhotos(diary: Diary) {
+  return diary.photos ?? []
+}
+
+/** 匹配日记关联文案（照片属于该日记的优先，其次同旅程同心情） */
+function findCopywriting(diary: Diary): Copywriting | undefined {
+  const photoIds = new Set(diaryPhotos(diary).map((photo) => photo.id))
+  return (
+    copywritings.value.find((item) => item.photoId !== null && photoIds.has(item.photoId)) ??
+    copywritings.value.find((item) => item.mood !== null && item.mood === diary.mood)
+  )
+}
+
+function flipTo(index: number) {
+  flipDirection.value = index > currentSpread.value ? 'next' : 'prev'
+  currentSpread.value = index
+}
+
+onMounted(async () => {
+  try {
+    const response = await getMyCopywritings({ journeyId: props.journey.id })
+    copywritings.value = response.data
+  } catch (error) {
+    console.error('获取旅程文案失败:', error)
+  }
+})
+</script>
+
+<style scoped>
+.journal-container {
+  padding: 16px 0 8px;
+}
+
+/* 书本视口（3D 透视） */
+.book-viewport {
+  perspective: 2200px;
+  min-height: 460px;
+}
+
+.spread {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 10px 32px rgba(61, 61, 61, 0.14);
+  transform-style: preserve-3d;
+  background-color: #fffdf7;
+}
+
+/* 页面通用 */
+.page {
+  min-height: 460px;
+  padding: 32px 36px;
+  background-color: #fffdf7;
+  position: relative;
+}
+
+/* 右页装订线阴影 */
+.page:last-child {
+  box-shadow: inset 12px 0 16px -12px rgba(61, 61, 61, 0.18);
+}
+
+/* 封面 */
+.cover-page {
+  display: flex;
+  align-items: flex-end;
+  grid-column: 1 / -1;
+  position: relative;
+}
+
+.cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.08) 60%, transparent);
+}
+
+.cover-content {
+  position: relative;
+  padding: 36px;
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.cover-badge {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 4px 14px;
+  margin-bottom: 16px;
+}
+
+.cover-title {
+  color: white;
+  font-size: 34px;
+  font-weight: 600;
+  margin: 0 0 14px 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.cover-meta {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  margin: 0 0 6px 0;
+}
+
+/* 照片页：拍立得照片墙 */
+.photo-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image:
+    radial-gradient(#e8e4d8 1px, transparent 1px),
+    radial-gradient(#e8e4d8 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.photo-wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  align-content: center;
+  max-width: 100%;
+  padding: 10px;
+}
+
+.polaroid {
+  background-color: white;
+  padding: 8px 8px 22px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+.polaroid img {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+.no-photo {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 120px 0;
+}
+
+/* 文字页 */
+.text-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.page-date {
+  color: #8fb996;
+  font-size: 13px;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.page-title {
+  font-size: 22px;
+  color: #3d3d3d;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+}
+
+.page-mood {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  font-size: 12px;
+  color: #5b8c5a;
+  background-color: rgba(91, 140, 90, 0.1);
+  border-radius: 999px;
+  padding: 3px 12px;
+  margin-bottom: 16px;
+}
+
+.page-content {
+  flex: 1;
+  color: #555;
+  font-size: 14px;
+  line-height: 2;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+.page-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #8fb996;
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+/* 关联文案引用 */
+.page-copywriting {
+  margin-top: 16px;
+  background-color: rgba(232, 192, 122, 0.12);
+  border-left: 3px solid #e8c07a;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  position: relative;
+}
+
+.copywriting-quote {
+  position: absolute;
+  top: -4px;
+  left: 8px;
+  font-size: 24px;
+  color: #e8c07a;
+  font-family: Georgia, serif;
+}
+
+.page-copywriting p {
+  margin: 0;
+  color: #7a6a45;
+  font-size: 13px;
+  line-height: 1.8;
+  font-style: italic;
+}
+
+/* 封底 */
+.end-page {
+  align-items: center;
+  justify-content: center;
+}
+
+.end-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 40px;
+  margin: auto 0;
+}
+
+.end-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: center;
+}
+
+.end-value {
+  font-size: 34px;
+  color: #5b8c5a;
+  font-weight: 600;
+}
+
+.end-label {
+  font-size: 13px;
+  color: #8fb996;
+}
+
+.end-quote {
+  color: #a8c5a8;
+  font-size: 15px;
+  letter-spacing: 2px;
+  margin: 32px 0 0;
+}
+
+.blank-page {
+  background-image: linear-gradient(rgba(143, 185, 150, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 185, 150, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* 翻页控制 */
+.journal-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px 0 8px;
+}
+
+.journal-page-num {
+  color: #8fb996;
+  font-size: 13px;
+  min-width: 64px;
+  text-align: center;
+}
+
+/* 翻页动画（3D） */
+.flip-next-enter-active,
+.flip-next-leave-active,
+.flip-prev-enter-active,
+.flip-prev-leave-active {
+  transition:
+    transform 0.55s ease,
+    opacity 0.55s ease;
+}
+
+.flip-next-enter-from {
+  transform: rotateY(-70deg);
+  opacity: 0;
+}
+
+.flip-next-leave-to {
+  transform: rotateY(35deg);
+  opacity: 0;
+}
+
+.flip-prev-enter-from {
+  transform: rotateY(70deg);
+  opacity: 0;
+}
+
+.flip-prev-leave-to {
+  transform: rotateY(-35deg);
+  opacity: 0;
+}
+
+/* 手机端单页 */
+@media (max-width: 768px) {
+  .spread {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-page {
+    min-height: 320px;
+  }
+
+  .polaroid img {
+    width: 120px;
+    height: 120px;
+  }
+}
+</style>

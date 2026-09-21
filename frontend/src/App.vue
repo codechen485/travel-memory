@@ -4,6 +4,8 @@ import {
   NConfigProvider,
   NMessageProvider,
   NDialogProvider,
+  dateZhCN,
+  zhCN,
   type GlobalThemeOverrides,
 } from 'naive-ui'
 
@@ -33,7 +35,7 @@ const themeOverrides: GlobalThemeOverrides = {
 </script>
 
 <template>
-  <n-config-provider :theme-overrides="themeOverrides">
+  <n-config-provider :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
       <n-dialog-provider>
         <RouterView />
