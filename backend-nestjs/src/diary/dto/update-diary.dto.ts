@@ -3,22 +3,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsDateString,
-  IsNumber,
-  IsIn,
   MinLength,
   MaxLength,
 } from 'class-validator';
-
-const MOOD_VALUES = [
-  'peaceful',
-  'amazed',
-  'miss',
-  'relieved',
-  'expect',
-  'reluctant',
-  'free',
-  'healed',
-] as const;
 
 export class UpdateDiaryDto {
   @IsOptional()
@@ -37,19 +24,12 @@ export class UpdateDiaryDto {
   content?: string;
 
   @IsOptional()
-  @IsIn(MOOD_VALUES, { message: '心情值不合法' })
-  mood?: typeof MOOD_VALUES[number];
+  @IsString({ message: '心情必须是字符串' })
+  @MaxLength(20, { message: '心情不能超过20个字符' })
+  mood?: string;
 
   @IsOptional()
   @IsString({ message: '位置名称必须是字符串' })
   @MaxLength(200, { message: '位置名称不能超过200个字符' })
   locationName?: string;
-
-  @IsOptional()
-  @IsNumber()
-  latitude?: number;
-
-  @IsOptional()
-  @IsNumber()
-  longitude?: number;
 }

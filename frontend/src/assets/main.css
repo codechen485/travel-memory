@@ -1,3 +1,126 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================================
+   《行囊》全局视觉风格
+   视觉基调：自然 · 旅游 · 自由 · 绿色小清新
+   色彩系统 / 字体规范 / 过渡动画 / 滚动条 / 导航栏吸顶
+   ============================================================ */
+
+/* 主题色 CSS 变量（与 tailwind.config.js 对齐） */
+:root {
+  --color-primary: #5b8c5a; /* 苔藓绿（主色） */
+  --color-secondary: #8fb996; /* 浅叶绿（辅色） */
+  --color-accent: #e8c07a; /* 麦秆黄（强调） */
+  --color-background: #f7f5f0; /* 米白（背景） */
+  --color-text: #3d3d3d; /* 深灰（文字） */
+  --color-card: #d4e2d4; /* 薄雾绿（分割线/边框） */
+  --color-decoration: #a8c5a8; /* 远山绿（装饰） */
+  --shadow-card: 0 4px 20px rgba(91, 140, 90, 0.08);
+  --shadow-card-hover: 0 8px 24px rgba(91, 140, 90, 0.13);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  /* 正文：思源黑体优先（文档 7.2 字体规范），系统字体回退 */
+  font-family:
+    'Noto Sans SC',
+    'Source Han Sans SC',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    sans-serif;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 标题：思源宋体优先，衬线字体带来书卷感 */
+h1,
+h2,
+h3 {
+  font-family:
+    'Noto Serif SC',
+    'Source Han Serif SC',
+    'STSong',
+    'SimSun',
+    serif;
+  letter-spacing: 0.5px;
+}
+
+/* 文本选中色 */
+::selection {
+  background-color: rgba(91, 140, 90, 0.25);
+  color: inherit;
+}
+
+/* 自定义滚动条（绿色细条） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #d4e2d4;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #8fb996;
+}
+
+/* 导航栏统一吸顶 + 毛玻璃（所有页面 .navbar 共用） */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(91, 140, 90, 0.08);
+  border-bottom: 1px solid rgba(212, 226, 212, 0.5);
+}
+
+/* 页面切换过渡（配合 App.vue 的 <Transition name="page">） */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* 通用卡片入场动画（fade + 上浮） */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 图片柔和淡入 */
+img {
+  transition: opacity 0.3s ease;
+}

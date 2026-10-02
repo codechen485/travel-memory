@@ -19,6 +19,7 @@ import {
   CopywritingQueryDto,
   CreateCopywritingDto,
   GenerateCopywritingDto,
+  PublicQueryDto,
   UpdateCopywritingDto,
 } from './dto/create-copywriting.dto';
 import { ApiResponse } from '../common/dto/api-response.dto';
@@ -43,6 +44,20 @@ export class CopywritingController {
     return ApiResponse.success('文案生成成功', data);
   }
 
+  @Post(':id/like')
+  @HttpCode(HttpStatus.OK)
+  async like(@Param('id', ParseIntPipe) id: number) {
+    const data = await this.copywritingService.like(id);
+    return ApiResponse.success('点赞成功', data);
+  }
+
+  @Post(':id/collect')
+  @HttpCode(HttpStatus.OK)
+  async collect(@Request() req: AuthenticatedRequest, @Param('id', ParseIntPipe) id: number) {
+    await this.copywritingService.collect(req.user.id, id);
+    return ApiResponse.success('收藏成功', null);
+  }
+
   @Post()
   async create(@Request() req: AuthenticatedRequest, @Body() dto: CreateCopywritingDto) {
     const data = await this.copywritingService.create(req.user.id, dto);
@@ -54,9 +69,23 @@ export class CopywritingController {
     const data = await this.copywritingService.findMy(req.user.id, {
       journeyId: query.journeyId,
       mood: query.mood,
-      sceneTag: query.sceneTag,
     });
     return ApiResponse.success('获取文案列表成功', data);
+  }
+
+  @Get('public')
+  async findPublic(@Query() query: PublicQueryDto) {
+    const data = await this.copywritingService.findPublic({
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    return ApiResponse.success('获取公开文案成功', data);
+  }
+
+  @Get('collected')
+  async findCollected(@Request() req: AuthenticatedRequest) {
+    const data = await this.copywritingService.findCollected(req.user.id);
+    return ApiResponse.success('获取收藏列表成功', data);
   }
 
   @Get(':id')

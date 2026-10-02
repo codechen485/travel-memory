@@ -1,23 +1,19 @@
 <template>
   <div class="diary-editor-container">
     <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="nav-left">
-          <n-button quaternary size="small" @click="goBack">
-            <template #icon>
-              <n-icon :component="ArrowBackOutline" />
-            </template>
-            返回旅程
-          </n-button>
-        </div>
-        <div class="page-title">
-          <span v-if="journey">{{ journey.title }} · {{ isEdit ? '编辑日记' : '写日记' }}</span>
-        </div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件） -->
+    <AppNavbar />
 
     <main class="main-content">
+      <div class="back-row">
+        <n-button quaternary size="small" class="back-link" @click="goBack">
+          <template #icon>
+            <n-icon :component="ArrowBackOutline" />
+          </template>
+          返回旅程
+        </n-button>
+        <span v-if="journey" class="page-title">{{ journey.title }} · {{ isEdit ? '编辑日记' : '写日记' }}</span>
+      </div>
       <n-spin :show="loading">
         <n-form
           v-if="!loading"
@@ -63,20 +59,7 @@
               <template #prefix>
                 <n-icon :component="LocationOutline" color="#8FB996" />
               </template>
-              <template #suffix>
-                <n-tooltip trigger="hover">
-                  <template #trigger>
-                    <n-button text size="tiny" :loading="locating" @click="handleLocate">
-                      <template #icon>
-                        <n-icon :component="LocateOutline" color="#5B8C5A" />
-                      </template>
-                    </n-button>
-                  </template>
-                  获取当前定位（用于地图轨迹展示）
-                </n-tooltip>
-              </template>
             </n-input>
-            <div v-if="hasCoordinates" class="location-coords">已记录坐标：{{ formData.latitude!.toFixed(4) }}, {{ formData.longitude!.toFixed(4) }}</div>
           </n-form-item>
 
           <!-- 富文本编辑器 -->
@@ -122,19 +105,19 @@ import {
   NIcon,
   NInput,
   NSpin,
-  NTooltip,
   useMessage,
   type FormInst,
   type FormRules,
   type FormItemRule,
 } from 'naive-ui'
-import { ArrowBackOutline, LocationOutline, LocateOutline } from '@vicons/ionicons5'
+import { ArrowBackOutline, LocationOutline } from '@vicons/ionicons5'
 import { getJourney } from '@/api/journey'
 import { createDiary, getDiary, updateDiary, type Diary } from '@/api/diary'
 import type { PhotoInfo } from '@/api/photo'
 import MoodPicker from '@/components/MoodPicker.vue'
 import PhotoUploader from '@/components/PhotoUploader.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
 import type { Mood } from '@/api/diary'
 
 const route = useRoute()
@@ -162,8 +145,6 @@ interface DiaryFormData {
   title: string
   mood: Mood | null
   locationName: string
-  latitude: number | null
-  longitude: number | null
   content: string
 }
 
@@ -172,42 +153,8 @@ const formData = ref<DiaryFormData>({
   title: '',
   mood: null,
   locationName: '',
-  latitude: null,
-  longitude: null,
   content: '',
 })
-
-const locating = ref(false)
-
-const hasCoordinates = computed(
-  () => formData.value.latitude !== null && formData.value.longitude !== null,
-)
-
-/** 浏览器地理定位，获取当前坐标（用于地图轨迹展示） */
-function handleLocate() {
-  if (!navigator.geolocation) {
-    message.warning('当前浏览器不支持定位')
-    return
-  }
-  locating.value = true
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      formData.value.latitude = Number(position.coords.latitude.toFixed(7))
-      formData.value.longitude = Number(position.coords.longitude.toFixed(7))
-      locating.value = false
-      message.success('已获取当前坐标，将在地图轨迹中展示')
-    },
-    (error) => {
-      locating.value = false
-      if (error.code === error.PERMISSION_DENIED) {
-        message.warning('定位权限被拒绝，可手动输入位置名称')
-      } else {
-        message.warning('定位失败，请稍后重试')
-      }
-    },
-    { enableHighAccuracy: true, timeout: 10000 },
-  )
-}
 
 const rules: FormRules = {
   date: [
@@ -258,8 +205,6 @@ onMounted(async () => {
         title: diary.title,
         mood: diary.mood,
         locationName: diary.locationName ?? '',
-        latitude: diary.latitude != null ? Number(diary.latitude) : null,
-        longitude: diary.longitude != null ? Number(diary.longitude) : null,
         content: diary.content,
       }
       photos.value = diary.photos ?? []
@@ -305,14 +250,14 @@ async function handleSubmit() {
     content,
     mood: mood ?? undefined,
     locationName: locationName.trim() || undefined,
-    latitude: formData.value.latitude ?? undefined,
-    longitude: formData.value.longitude ?? undefined,
   }
 
   saving.value = true
   try {
     if (isEdit.value) {
-      await updateDiary(diaryId.value, payload)
+      // 更新接口白名单不含 journeyId，需剔除后再提交
+      const { journeyId: _omit, ...updatePayload } = payload
+      await updateDiary(diaryId.value, updatePayload)
       message.success('日记已更新')
     } else {
       await createDiary(payload)
@@ -333,25 +278,21 @@ async function handleSubmit() {
   background-color: #f7f5f0;
 }
 
-.navbar {
-  background-color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 0 40px;
-}
-
-.navbar-content {
-  max-width: 900px;
-  margin: 0 auto;
-  height: 60px;
+.back-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.back-link {
+  color: #8fb996;
 }
 
 .page-title {
   color: #3d3d3d;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .main-content {
@@ -384,10 +325,9 @@ async function handleSubmit() {
   gap: 16px;
   margin-top: 24px;
 }
-
-.location-coords {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #8fb996;
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px 40px;
+  }
 }
 </style>

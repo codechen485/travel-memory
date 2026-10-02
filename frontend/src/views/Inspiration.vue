@@ -1,35 +1,14 @@
 <template>
   <div class="inspiration-container">
-    <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="nav-left">
-          <n-button quaternary size="small" @click="router.push('/')">
-            <template #icon>
-              <n-icon :component="ArrowBackOutline" />
-            </template>
-            返回首页
-          </n-button>
-        </div>
-        <div class="page-title">灵感漂流 · 来自陌生人的旅途碎片</div>
-        <div class="nav-right"></div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件） -->
+    <AppNavbar />
 
     <main class="main-content">
-      <!-- 场景分类 Tab -->
-      <n-tabs
-        type="segment"
-        animated
-        :value="activeScene"
-        @update:value="handleSceneChange"
-        class="scene-tabs"
-      >
-        <n-tab name="all">全部</n-tab>
-        <n-tab v-for="scene in SCENE_OPTIONS" :key="scene.value" :name="scene.value">
-          {{ scene.label }}
-        </n-tab>
-      </n-tabs>
+      <!-- 页头 -->
+      <div class="page-header">
+        <h2>灵感漂流</h2>
+        <p>来自陌生人的旅途碎片</p>
+      </div>
 
       <n-spin :show="loading">
         <!-- 瀑布流卡片 -->
@@ -47,14 +26,7 @@
             <div class="card-body" @click="openDetail(item)">
               <p class="card-text">{{ item.finalVersion }}</p>
               <div class="card-tags">
-                <span
-                  v-if="getSceneOption(item.sceneTag)"
-                  class="mini-tag"
-                  :style="{
-                    backgroundColor: `${getSceneOption(item.sceneTag)?.color}1A`,
-                    color: getSceneOption(item.sceneTag)?.color,
-                  }"
-                >
+                <span v-if="item.sceneTag" class="mini-tag scene-tag">
                   {{ getSceneLabel(item.sceneTag) }}
                 </span>
                 <span
@@ -118,37 +90,50 @@
       </div>
     </main>
 
-    <!-- 详情弹窗 -->
-    <n-modal
-      v-model:show="showDetail"
-      preset="card"
-      class="detail-modal"
-      :title="detailItem ? `${getSceneLabel(detailItem.sceneTag)} · ${formatShortDate(detailItem.createdAt)}` : ''"
-    >
-      <template v-if="detailItem">
-        <img
-          v-if="detailItem.photo"
-          :src="detailItem.photo.originalUrl"
-          alt="照片"
-          class="detail-photo"
-        />
-        <div class="detail-section">
-          <div class="section-label">短句版</div>
-          <p>{{ detailItem.shortVersion }}</p>
+    <!-- 详情弹窗：自绘卡片（居中定宽 + 限高 + 内部滚动），避免被撑成整页 -->
+    <n-modal v-model:show="showDetail" :mask-closable="true">
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h3>
+            {{
+              detailItem
+                ? `${getSceneLabel(detailItem.sceneTag)} · ${formatShortDate(detailItem.createdAt)}`
+                : ''
+            }}
+          </h3>
+          <n-button text size="small" class="detail-close" @click="showDetail = false">
+            <template #icon>
+              <n-icon :component="CloseOutline" />
+            </template>
+          </n-button>
         </div>
-        <div class="detail-section">
-          <div class="section-label">叙事版</div>
-          <p>{{ detailItem.narrativeVersion }}</p>
+        <div class="detail-card-body">
+          <div v-if="detailItem" class="detail-content">
+            <img
+              v-if="detailItem.photo"
+              :src="detailItem.photo.originalUrl"
+              alt="照片"
+              class="detail-photo"
+            />
+            <div class="detail-section">
+              <div class="section-label">短句版</div>
+              <p class="section-text">{{ detailItem.shortVersion }}</p>
+            </div>
+            <div class="detail-section">
+              <div class="section-label">叙事版</div>
+              <p class="section-text">{{ detailItem.narrativeVersion }}</p>
+            </div>
+            <div class="detail-section">
+              <div class="section-label">诗意版</div>
+              <p class="section-text poetic">{{ detailItem.poeticVersion }}</p>
+            </div>
+            <div class="detail-section final">
+              <div class="section-label">最终版</div>
+              <p class="section-text">{{ detailItem.finalVersion }}</p>
+            </div>
+          </div>
         </div>
-        <div class="detail-section">
-          <div class="section-label">诗意版</div>
-          <p class="poetic-text">{{ detailItem.poeticVersion }}</p>
-        </div>
-        <div class="detail-section final">
-          <div class="section-label">最终版</div>
-          <p>{{ detailItem.finalVersion }}</p>
-        </div>
-      </template>
+      </div>
     </n-modal>
   </div>
 </template>
@@ -162,14 +147,12 @@ import {
   NIcon,
   NModal,
   NSpin,
-  NTab,
-  NTabs,
   useMessage,
 } from 'naive-ui'
 import {
-  ArrowBackOutline,
   Bookmark,
   BookmarkOutline,
+  CloseOutline,
   HeartOutline,
   WaterOutline,
 } from '@vicons/ionicons5'
@@ -180,15 +163,15 @@ import {
   type Copywriting,
 } from '@/api/copywriting'
 import { getMoodLabel, getMoodOption } from '@/utils/mood'
-import { SCENE_OPTIONS, getSceneLabel, getSceneOption } from '@/utils/scene'
+import { getSceneLabel } from '@/utils/scene'
 import { formatShortDate } from '@/utils/format'
+import AppNavbar from '@/components/AppNavbar.vue'
 
 const router = useRouter()
 const message = useMessage()
 
 const PAGE_SIZE = 20
 
-const activeScene = ref('all')
 const copywritings = ref<Copywriting[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -213,7 +196,6 @@ async function fetchList(reset = true) {
 
   try {
     const response = await getPublicCopywritings({
-      sceneTag: activeScene.value === 'all' ? undefined : activeScene.value,
       page: page.value,
       pageSize: PAGE_SIZE,
     })
@@ -233,11 +215,6 @@ async function fetchList(reset = true) {
     loading.value = false
     loadingMore.value = false
   }
-}
-
-function handleSceneChange(scene: string | number) {
-  activeScene.value = String(scene)
-  fetchList(true)
 }
 
 function loadMore() {
@@ -289,40 +266,27 @@ onMounted(() => {
   background-color: #f7f5f0;
 }
 
-/* 导航栏 */
-.navbar {
-  background-color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 0 40px;
+.page-header {
+  margin-bottom: 24px;
 }
 
-.navbar-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.page-title {
+.page-header h2 {
+  font-size: 32px;
   color: #3d3d3d;
-  font-size: 15px;
-  font-weight: 500;
+  margin: 0 0 8px 0;
+  font-weight: 600;
 }
 
-.nav-right {
-  width: 100px;
+.page-header p {
+  color: #8fb996;
+  margin: 0;
+  font-size: 15px;
 }
 
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 40px 60px;
-}
-
-.scene-tabs {
-  margin-bottom: 28px;
+  padding: 32px 40px 60px;
 }
 
 /* 瀑布流（CSS 多列） */
@@ -340,6 +304,13 @@ onMounted(() => {
 @media (max-width: 768px) {
   .waterfall {
     column-count: 2;
+  }
+}
+
+/* 手机端单列：375px 下 2 列卡片过窄（仅 ~138px），改单列保证可读 */
+@media (max-width: 480px) {
+  .waterfall {
+    column-count: 1;
   }
 }
 
@@ -378,6 +349,7 @@ onMounted(() => {
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 6;
+  line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -397,6 +369,11 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.scene-tag {
+  background-color: #eef2ee;
+  color: #6b7a6b;
+}
+
 .card-journey {
   color: #8fb996;
   font-size: 12px;
@@ -410,50 +387,89 @@ onMounted(() => {
   padding: 8px 0;
 }
 
-/* 详情弹窗 */
-.detail-modal {
+/* 详情弹窗（自绘卡片：居中定宽 + 限高 + 内部滚动） */
+.detail-card {
   width: 640px;
   max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+
+.detail-card-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f2f0e9;
+}
+
+.detail-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #3d3d3d;
+}
+
+.detail-close {
+  color: #8fb996;
+}
+
+.detail-card-body {
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .detail-photo {
   width: 100%;
-  border-radius: 10px;
-  margin-bottom: 20px;
+  height: 300px;
+  object-fit: cover;
+  border-radius: 12px;
   display: block;
 }
 
 .detail-section {
-  margin-bottom: 18px;
-}
-
-.section-label {
-  font-size: 12px;
-  color: #8fb996;
-  letter-spacing: 2px;
-  margin-bottom: 6px;
-}
-
-.detail-section p {
-  color: #3d3d3d;
-  font-size: 14px;
-  line-height: 1.9;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.poetic-text {
-  font-style: italic;
-}
-
-.detail-section.final {
-  background-color: rgba(91, 140, 90, 0.07);
+  background: #faf9f6;
   border-radius: 10px;
   padding: 14px 16px;
 }
 
-.detail-section.final .section-label {
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
   color: #5b8c5a;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+
+.section-text {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #3d3d3d;
+  white-space: pre-wrap;
+}
+
+.section-text.poetic {
+  text-align: center;
+  font-family: 'Noto Serif SC', serif;
+  letter-spacing: 1px;
+}
+
+.detail-section.final {
+  background: #f0f5f0;
+  border: 1px solid #d4e2d4;
 }
 
 .load-more {

@@ -51,6 +51,15 @@ export class JourneyController {
     return ApiResponse.success('获取旅程详情成功', data);
   }
 
+  @Get(':id/journal')
+  async generateJournal(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const data = await this.journeyService.generateJournal(req.user.id, id);
+    return ApiResponse.success('手帐生成成功', data);
+  }
+
   @Put(':id')
   async update(
     @Request() req: AuthenticatedRequest,

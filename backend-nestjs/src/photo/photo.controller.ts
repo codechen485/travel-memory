@@ -72,6 +72,21 @@ export class PhotoController {
     return ApiResponse.success('照片上传成功', data);
   }
 
+  /** 通用图片上传（旅程封面/头像等）：只存文件返回 URL，不创建照片记录 */
+  @Post('upload-image')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadImage(@UploadedFile() file: UploadedFileShape) {
+    if (!file) {
+      throw new BadRequestException('请上传图片文件');
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      throw new BadRequestException('图片大小不能超过10MB');
+    }
+
+    const data = await this.photoService.uploadGeneric(file);
+    return ApiResponse.success('图片上传成功', data);
+  }
+
   @Get(':id')
   async findOne(@Request() req: AuthenticatedRequest, @Param('id', ParseIntPipe) id: number) {
     const data = await this.photoService.findOne(req.user.id, id);

@@ -2,20 +2,33 @@
   <div class="journal-container">
     <!-- 书本 -->
     <div class="book-viewport">
-      <Transition :name="flipDirection === 'next' ? 'flip-next' : 'flip-prev'">
+      <Transition :name="flipDirection === 'next' ? 'flip-next' : 'flip-prev'" mode="out-in">
         <div v-if="spreads.length > 0" :key="currentSpread" class="spread">
-          <!-- 封面 -->
+          <!-- 封面跨页：左纸质封面 + 右扉页拍立得（与后续跨页同构，区别于顶部 hero 横幅） -->
           <template v-if="current.type === 'cover'">
-            <div class="page cover-page" :style="coverStyle">
-              <div class="cover-overlay"></div>
-              <div class="cover-content">
+            <div class="page cover-page">
+              <span class="tape"></span>
+              <div class="cover-inner">
                 <span class="cover-badge">TRAVEL JOURNAL</span>
                 <h2 class="cover-title">{{ journey.title }}</h2>
                 <p class="cover-meta">{{ journey.destinations.join(' · ') }}</p>
                 <p class="cover-meta">{{ formatDate(journey.startDate) }} — {{ formatDate(journey.endDate) }}</p>
+                <div class="cover-stamp">
+                  <span class="stamp-value">{{ dayCount }}</span>
+                  <span class="stamp-label">天旅程</span>
+                </div>
               </div>
             </div>
-            <div class="page blank-page"></div>
+            <div class="page cover-photo-page">
+              <div v-if="journey.coverImage" class="cover-polaroid">
+                <img :src="journey.coverImage" alt="封面" />
+                <span class="polaroid-caption">{{ journey.destinations[0] ?? journey.title }}</span>
+              </div>
+              <div v-else class="cover-polaroid cover-polaroid-empty" :style="{ background: getCoverGradient(journey.id) }">
+                <span class="polaroid-caption">{{ journey.title }}</span>
+              </div>
+              <p class="cover-intro">共 {{ dayCount }} 天 · {{ diaries.length }} 篇日记 · {{ photoCount }} 张照片</p>
+            </div>
           </template>
 
           <!-- 日记跨页：左照片 右文字 -->
@@ -158,17 +171,6 @@ const photoCount = computed(() =>
   diaries.value.reduce((sum, diary) => sum + (diary.photos?.length ?? 0), 0),
 )
 
-const coverStyle = computed(() => {
-  if (props.journey.coverImage) {
-    return {
-      backgroundImage: `url(${props.journey.coverImage})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-    }
-  }
-  return { background: getCoverGradient(props.journey.id) }
-})
-
 interface JournalSpread {
   type: 'cover' | 'diary' | 'end'
   diary?: Diary
@@ -240,9 +242,10 @@ onMounted(async () => {
   background-color: #fffdf7;
 }
 
-/* 页面通用 */
+/* 页面通用（固定书高，保证各跨页高度一致不跳动） */
 .page {
-  min-height: 460px;
+  height: 460px;
+  overflow: hidden;
   padding: 32px 36px;
   background-color: #fffdf7;
   position: relative;
@@ -253,50 +256,139 @@ onMounted(async () => {
   box-shadow: inset 12px 0 16px -12px rgba(61, 61, 61, 0.18);
 }
 
-/* 封面 */
+/* 封面：左纸质封面 */
 .cover-page {
   display: flex;
-  align-items: flex-end;
-  grid-column: 1 / -1;
-  position: relative;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background-image: linear-gradient(rgba(143, 185, 150, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 185, 150, 0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-.cover-overlay {
+/* 和纸胶带 */
+.tape {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.08) 60%, transparent);
+  top: 18px;
+  left: 50%;
+  width: 96px;
+  height: 26px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(143, 185, 150, 0.35);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.cover-content {
-  position: relative;
-  padding: 36px;
-  width: 100%;
-  grid-column: 1 / -1;
+.cover-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .cover-badge {
   display: inline-block;
   font-size: 11px;
   letter-spacing: 4px;
-  color: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #5b8c5a;
+  border: 1px solid #8fb996;
   border-radius: 999px;
   padding: 4px 14px;
   margin-bottom: 16px;
 }
 
 .cover-title {
-  color: white;
+  color: #3d3d3d;
   font-size: 34px;
   font-weight: 600;
-  margin: 0 0 14px 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: 'Noto Serif SC', 'Songti SC', serif;
+  margin: 0 0 12px 0;
 }
 
 .cover-meta {
-  color: rgba(255, 255, 255, 0.92);
+  color: #8fb996;
   font-size: 14px;
   margin: 0 0 6px 0;
+}
+
+/* 虚线邮戳圈 */
+.cover-stamp {
+  margin-top: 22px;
+  width: 84px;
+  height: 84px;
+  border: 2px dashed #8fb996;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #5b8c5a;
+  transform: rotate(-8deg);
+}
+
+.stamp-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.stamp-label {
+  font-size: 11px;
+  color: #8fb996;
+  margin-top: 4px;
+}
+
+/* 封面：右扉页拍立得 */
+.cover-photo-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background-image: radial-gradient(#e8e4d8 1px, transparent 1px),
+    radial-gradient(#e8e4d8 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.cover-polaroid {
+  background-color: white;
+  padding: 10px 10px 34px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+  transform: rotate(2deg);
+  position: relative;
+}
+
+.cover-polaroid img {
+  width: 260px;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-polaroid-empty {
+  width: 280px;
+  height: 234px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.polaroid-caption {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: #8fb996;
+}
+
+.cover-intro {
+  margin: 0;
+  color: #7a6a45;
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 1px;
 }
 
 /* 照片页：拍立得照片墙 */
@@ -481,33 +573,35 @@ onMounted(async () => {
   text-align: center;
 }
 
-/* 翻页动画（3D） */
+/* 翻页动画（3D 翻书，out-in 保证新旧页不共存于文档流） */
 .flip-next-enter-active,
 .flip-next-leave-active,
 .flip-prev-enter-active,
 .flip-prev-leave-active {
   transition:
-    transform 0.55s ease,
-    opacity 0.55s ease;
+    transform 0.45s ease,
+    opacity 0.45s ease;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 .flip-next-enter-from {
-  transform: rotateY(-70deg);
+  transform: rotateY(45deg);
   opacity: 0;
 }
 
 .flip-next-leave-to {
-  transform: rotateY(35deg);
+  transform: rotateY(-24deg);
   opacity: 0;
 }
 
 .flip-prev-enter-from {
-  transform: rotateY(70deg);
+  transform: rotateY(-45deg);
   opacity: 0;
 }
 
 .flip-prev-leave-to {
-  transform: rotateY(-35deg);
+  transform: rotateY(24deg);
   opacity: 0;
 }
 
@@ -518,7 +612,7 @@ onMounted(async () => {
   }
 
   .photo-page {
-    min-height: 320px;
+    height: 320px;
   }
 
   .polaroid img {

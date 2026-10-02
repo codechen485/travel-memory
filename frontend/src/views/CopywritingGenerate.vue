@@ -1,33 +1,20 @@
 <template>
   <div class="copywriting-generate-container">
-    <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="nav-left">
-          <n-button quaternary size="small" @click="goBack">
-            <template #icon>
-              <n-icon :component="ArrowBackOutline" />
-            </template>
-            {{ journey ? '返回旅程' : '返回' }}
-          </n-button>
-        </div>
-        <div class="page-title">此刻文案</div>
-        <div class="nav-right">
-          <n-button quaternary size="small" @click="router.push('/copywritings')">
-            <template #icon>
-              <n-icon :component="BookmarksOutline" />
-            </template>
-            我的文案集
-          </n-button>
-        </div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件） -->
+    <AppNavbar />
 
     <main class="main-content">
+      <n-button quaternary size="small" class="back-link" @click="goBack">
+        <template #icon>
+          <n-icon :component="ArrowBackOutline" />
+        </template>
+        {{ journey ? '返回旅程' : '返回' }}
+      </n-button>
+
       <!-- 步骤指示器 -->
       <n-steps :current="currentStep" size="small" class="gen-steps">
         <n-step title="选择照片" />
-        <n-step title="场景与心情" />
+        <n-step title="此刻心情" />
         <n-step title="生成与保存" />
       </n-steps>
 
@@ -94,7 +81,7 @@
                 :disabled="!selectedPhoto"
                 @click="currentStep = 2"
               >
-                下一步：场景与心情
+                下一步：心情
                 <template #icon>
                   <n-icon :component="ArrowForwardOutline" />
                 </template>
@@ -102,30 +89,14 @@
             </div>
           </section>
 
-          <!-- ============ 步骤 2：场景与心情 ============ -->
+          <!-- ============ 步骤 2：此刻心情 ============ -->
           <section v-show="currentStep === 2" class="step-panel">
-            <h3 class="panel-title">这张照片，拍下了怎样的风景？</h3>
+            <h3 class="panel-title">这张照片，是什么心情？</h3>
+            <p class="panel-subtitle">场景交给 AI 看图识别，你只需选一个此刻的心情（也可以不选）</p>
 
             <!-- 已选照片预览 -->
             <div v-if="selectedPhoto" class="selected-preview">
               <img :src="selectedPhoto.thumbnailUrl || selectedPhoto.originalUrl" alt="已选照片" />
-            </div>
-
-            <!-- 场景标签 -->
-            <div class="field-label">场景</div>
-            <div class="scene-picker">
-              <button
-                v-for="option in SCENE_OPTIONS"
-                :key="option.value"
-                type="button"
-                class="scene-item"
-                :class="{ active: selectedScene === option.value }"
-                :style="selectedScene === option.value ? activeSceneStyle(option) : {}"
-                @click="selectedScene = option.value"
-              >
-                <n-icon :component="option.icon" :size="18" />
-                <span>{{ option.label }}</span>
-              </button>
             </div>
 
             <!-- 心情 -->
@@ -137,7 +108,6 @@
               <n-button
                 type="primary"
                 size="large"
-                :disabled="!selectedScene || !selectedMood"
                 :loading="generating"
                 @click="handleGenerate"
               >
@@ -200,7 +170,7 @@
                   重新生成
                 </n-button>
                 <n-button size="large" quaternary :disabled="saving" @click="currentStep = 2">
-                  换场景心情
+                  换心情
                 </n-button>
                 <n-button
                   type="primary"
@@ -250,7 +220,6 @@ import {
   AddOutline,
   ArrowBackOutline,
   ArrowForwardOutline,
-  BookmarksOutline,
   CheckmarkCircle,
   ImagesOutline,
   RefreshOutline,
@@ -266,8 +235,8 @@ import {
   type CopywritingStyle,
   type GeneratedCopywriting,
 } from '@/api/copywriting'
-import { SCENE_OPTIONS, type SceneOption } from '@/utils/scene'
 import MoodPicker from '@/components/MoodPicker.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -284,7 +253,6 @@ interface PhotoOption extends PhotoInfo {
 const photoOptions = ref<PhotoOption[]>([])
 const selectedPhoto = ref<PhotoOption | null>(null)
 
-const selectedScene = ref<string | null>(null)
 const selectedMood = ref<Mood | null>(null)
 
 const generating = ref(false)
@@ -412,16 +380,8 @@ const panelSubtitle = computed(() =>
   journey.value ? `${journey.value.title} · 共 ${photoOptions.value.length} 张照片` : '',
 )
 
-function activeSceneStyle(option: SceneOption) {
-  return {
-    backgroundColor: option.color,
-    color: '#fff',
-    borderColor: option.color,
-  }
-}
-
 async function handleGenerate() {
-  if (!selectedScene.value || !selectedMood.value || !journey.value) return
+  if (!journey.value) return
 
   generating.value = true
   currentStep.value = 3
@@ -430,8 +390,7 @@ async function handleGenerate() {
   try {
     const response = await generateCopywriting({
       photoId: selectedPhoto.value?.id,
-      sceneTag: selectedScene.value,
-      mood: selectedMood.value,
+      mood: selectedMood.value ?? undefined,
       journeyId: journey.value.id,
     })
     generated.value = response.data
@@ -452,7 +411,7 @@ function handleRegenerate() {
 }
 
 async function handleSave() {
-  if (!journey.value || !selectedScene.value || !finalText.value.trim()) return
+  if (!journey.value || !finalText.value.trim()) return
   if (!generated.value) return
 
   saving.value = true
@@ -460,7 +419,7 @@ async function handleSave() {
     await saveCopywriting({
       photoId: selectedPhoto.value?.id ?? null,
       journeyId: journey.value.id,
-      sceneTag: selectedScene.value,
+      sceneTag: generated.value.scene,
       mood: selectedMood.value ?? undefined,
       shortVersion: generated.value.shortVersion,
       narrativeVersion: generated.value.narrativeVersion,
@@ -492,35 +451,15 @@ function goBack() {
   background-color: #f7f5f0;
 }
 
-.navbar {
-  background: #fff;
-  border-bottom: 1px solid #e8f0e8;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.navbar-content {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.page-title {
-  font-weight: 600;
-  font-size: 15px;
-  color: #3d3d3d;
-  letter-spacing: 2px;
+.back-link {
+  margin-bottom: 16px;
+  color: #8fb996;
 }
 
 .main-content {
-  max-width: 760px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 28px 20px 60px;
+  padding: 32px 40px 60px;
 }
 
 .gen-steps {
@@ -639,31 +578,6 @@ function goBack() {
   margin: 18px 0 10px;
 }
 
-.scene-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.scene-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 20px;
-  border: 1.5px solid #dfe8df;
-  background: #fff;
-  color: #5f6f5f;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.scene-item:hover {
-  border-color: #8fb996;
-  color: #5b8c5a;
-}
-
 /* ---- 生成中 ---- */
 .generating-box {
   text-align: center;
@@ -743,5 +657,15 @@ function goBack() {
 
 .gen-empty {
   padding: 48px 0;
+}
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px 40px;
+  }
+
+  /* 照片选择网格在窄屏收紧，保证一行放得下多个缩略图 */
+  .photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
 }
 </style>

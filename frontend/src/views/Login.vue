@@ -122,6 +122,19 @@ const handleLogin = async () => {
   border-radius: 16px;
   padding: 40px;
   box-shadow: 0 4px 20px rgba(91, 140, 90, 0.08);
+  /* 入场动画：淡入 + 上浮 */
+  animation: card-enter 0.5s ease both;
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .login-header {
@@ -131,27 +144,29 @@ const handleLogin = async () => {
 
 .login-header h1 {
   font-size: 32px;
-  color: #5b8c5a;
+  color: var(--color-primary, #5b8c5a);
   margin: 0 0 10px 0;
   font-weight: 600;
 }
 
 .login-header p {
-  color: #8fb996;
+  color: var(--color-secondary, #8fb996);
   font-size: 14px;
   margin: 0;
+  letter-spacing: 1px;
 }
 
 .login-btn {
   width: 100%;
   height: 44px;
   font-size: 16px;
+  letter-spacing: 4px;
 }
 
 .login-footer {
   text-align: center;
   margin-top: 20px;
-  color: #8fb996;
+  color: var(--color-secondary, #8fb996);
   font-size: 14px;
 }
 

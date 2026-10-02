@@ -34,8 +34,6 @@ export class DiaryService {
         content: createDiaryDto.content ?? '',
         mood: createDiaryDto.mood ?? null,
         locationName: createDiaryDto.locationName ?? null,
-        latitude: createDiaryDto.latitude ?? null,
-        longitude: createDiaryDto.longitude ?? null,
       },
       include: { photos: true },
     });
@@ -76,8 +74,6 @@ export class DiaryService {
     if (updateDiaryDto.content !== undefined) data.content = updateDiaryDto.content;
     if (updateDiaryDto.mood !== undefined) data.mood = updateDiaryDto.mood;
     if (updateDiaryDto.locationName !== undefined) data.locationName = updateDiaryDto.locationName;
-    if (updateDiaryDto.latitude !== undefined) data.latitude = updateDiaryDto.latitude;
-    if (updateDiaryDto.longitude !== undefined) data.longitude = updateDiaryDto.longitude;
     if (updateDiaryDto.date !== undefined) {
       data.date = new Date(updateDiaryDto.date);
     }

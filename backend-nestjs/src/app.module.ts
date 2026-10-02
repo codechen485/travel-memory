@@ -7,6 +7,8 @@ import { JourneyModule } from './journey/journey.module';
 import { DiaryModule } from './diary/diary.module';
 import { PhotoModule } from './photo/photo.module';
 import { CopywritingModule } from './copywriting/copywriting.module';
+import { StatsModule } from './stats/stats.module';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { CopywritingModule } from './copywriting/copywriting.module';
     DiaryModule,
     PhotoModule,
     CopywritingModule,
+    StatsModule,
+    UserModule,
   ],
   controllers: [],
   providers: [],

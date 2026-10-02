@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { promises as fs } from 'fs';
 import path from 'path';
 import sharp from 'sharp';
+import exifr from 'exifr';
 
 /** 上传文件的最小结构（与 multer 的 File 兼容） */
 interface UploadedFile {
@@ -82,9 +83,12 @@ export class PhotoService {
     // 写入原图
     await fs.writeFile(originalPath, file.buffer);
 
-    // 生成缩略图并读取元信息
+    // 生成缩略图并读取元信息（含 EXIF GPS / 拍摄时间）
     let width: number | null = null;
     let height: number | null = null;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    let exifTakenAt: Date | null = null;
     try {
       const meta = await sharp(file.buffer).metadata();
       width = meta.width ?? null;
@@ -94,6 +98,22 @@ export class PhotoService {
         .resize({ width: THUMB_MAX_WIDTH, withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(thumbPath);
+
+      // EXIF GPS 坐标（用于地图轨迹展示）
+      const gps = await exifr.gps(file.buffer);
+      if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
+        latitude = Number(gps.latitude.toFixed(7));
+        longitude = Number(gps.longitude.toFixed(7));
+      }
+
+      // EXIF 拍摄时间（轨迹排序依据）
+      const exifDate = await exifr.parse(file.buffer, ['DateTimeOriginal']);
+      if (exifDate?.DateTimeOriginal) {
+        const takenAt = new Date(exifDate.DateTimeOriginal);
+        if (!Number.isNaN(takenAt.getTime())) {
+          exifTakenAt = takenAt;
+        }
+      }
     } catch (error) {
       console.error('缩略图生成失败，回退使用原图:', error);
       // 缩略图生成失败时，复制原图作为缩略图
@@ -109,8 +129,32 @@ export class PhotoService {
         width,
         height,
         fileSize: file.size,
+        latitude,
+        longitude,
+        exifTakenAt,
       },
     });
+  }
+
+  /**
+   * 通用图片上传：只存文件不写数据库（旅程封面/头像等场景）
+   */
+  async uploadGeneric(file: UploadedFile) {
+    if (!file) {
+      throw new BadRequestException('请上传图片文件');
+    }
+    if (!file.mimetype.startsWith('image/')) {
+      throw new BadRequestException('仅支持图片文件');
+    }
+
+    await this.ensureUploadDir();
+
+    const ext = MIME_EXT[file.mimetype] ?? 'jpg';
+    const baseName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const originalName = `${baseName}.${ext}`;
+    await fs.writeFile(path.join(UPLOAD_DIR, originalName), file.buffer);
+
+    return { url: `/uploads/${originalName}` };
   }
 
   /**

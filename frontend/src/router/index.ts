@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true }, // 旅行统计图表
   },
   {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { requiresAuth: true }, // 个人中心（资料编辑/收藏列表）
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/Login.vue'),
@@ -75,19 +81,20 @@ const router = createRouter({
   routes,
 })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
+// 路由守卫：Vue Router 4 用「返回值」代替已弃用的 next() 回调
+router.beforeEach((to) => {
   const token = localStorage.getItem('token')
 
+  // 需要登录但未登录，跳转到登录页
   if (to.meta.requiresAuth && !token) {
-    // 需要登录但未登录，跳转到登录页
-    next('/login')
-  } else if ((to.path === '/login' || to.path === '/register') && token) {
-    // 已登录但访问登录/注册页，跳转到首页
-    next('/')
-  } else {
-    next()
+    return '/login'
   }
+  // 已登录但访问登录/注册页，跳转到首页
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    return '/'
+  }
+  // 其余放行
+  return true
 })
 
 export default router

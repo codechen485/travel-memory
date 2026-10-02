@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import {
   NConfigProvider,
   NMessageProvider,
@@ -32,13 +32,19 @@ const themeOverrides: GlobalThemeOverrides = {
     borderRadius: '16px',
   },
 }
+
+const route = useRoute()
 </script>
 
 <template>
   <n-config-provider :theme-overrides="themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-message-provider>
       <n-dialog-provider>
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <Transition name="page" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>

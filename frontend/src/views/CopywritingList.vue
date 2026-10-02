@@ -1,61 +1,27 @@
 <template>
   <div class="copywriting-list-container">
-    <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="nav-left">
-          <n-button quaternary size="small" @click="router.push('/')">
-            <template #icon>
-              <n-icon :component="ArrowBackOutline" />
-            </template>
-            首页
-          </n-button>
-        </div>
-        <div class="page-title">我的文案集</div>
-        <div class="nav-right">
-          <n-button size="small" type="primary" @click="handleGenerate">
-            <template #icon>
-              <n-icon :component="SparklesOutline" />
-            </template>
-            生成新文案
-          </n-button>
-        </div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件） -->
+    <AppNavbar />
 
     <main class="main-content">
-      <!-- 筛选栏 -->
-      <div class="filter-bar">
-        <n-select
-          v-model:value="filterJourneyId"
-          :options="journeyOptions"
-          placeholder="按旅程筛选"
-          clearable
-          size="small"
-          class="filter-select"
-        />
-        <n-select
-          v-model:value="filterMood"
-          :options="moodOptions"
-          placeholder="按心情筛选"
-          clearable
-          size="small"
-          class="filter-select"
-        />
-        <n-select
-          v-model:value="filterScene"
-          :options="sceneOptions"
-          placeholder="按场景筛选"
-          clearable
-          size="small"
-          class="filter-select"
-        />
+      <!-- 页头 -->
+      <div class="page-header">
+        <div>
+          <h2>我的文案集</h2>
+          <p>把每一次心动，写成可以带走的句子</p>
+        </div>
+        <n-button type="primary" @click="handleGenerate">
+          <template #icon>
+            <n-icon :component="SparklesOutline" />
+          </template>
+          生成新文案
+        </n-button>
       </div>
 
       <n-spin :show="loading">
         <!-- 文案卡片列表 -->
         <div v-if="copywritings.length > 0" class="card-list">
-          <div v-for="item in copywritings" :key="item.id" class="copy-card">
+          <div v-for="item in visibleCopywritings" :key="item.id" class="copy-card">
             <!-- 左侧照片 -->
             <div v-if="item.photo" class="card-photo" @click="openDetail(item)">
               <img :src="item.photo.thumbnailUrl || item.photo.originalUrl" alt="照片" loading="lazy" />
@@ -64,12 +30,7 @@
             <!-- 右侧内容 -->
             <div class="card-body">
               <div class="card-tags">
-                <span
-                  v-if="getSceneOption(item.sceneTag)"
-                  class="mini-tag"
-                  :style="sceneTagStyle(item.sceneTag)"
-                >
-                  <n-icon :component="getSceneOption(item.sceneTag)!.icon" :size="12" />
+                <span v-if="item.sceneTag" class="mini-tag scene-tag">
                   {{ getSceneLabel(item.sceneTag) }}
                 </span>
                 <span
@@ -117,37 +78,53 @@
             </n-button>
           </template>
         </n-empty>
+
+        <!-- 加载更多：前端切片分批渲染，避免一次性铺开全部卡片把页面拉得过长 -->
+        <div v-if="copywritings.length > visibleCount" class="load-more">
+          <n-button @click="loadMore">
+            加载更多（还有 {{ copywritings.length - visibleCount }} 条）
+          </n-button>
+        </div>
       </n-spin>
     </main>
 
-    <!-- 文案详情弹窗：三种风格 + 最终版本 -->
-    <n-modal
-      v-model:show="showDetail"
-      preset="card"
-      class="detail-modal"
-      :title="detailTitle"
-      :bordered="false"
-    >
-      <div v-if="activeDetail" class="detail-content">
-        <div v-if="activeDetail.photo" class="detail-photo">
-          <img :src="activeDetail.photo.originalUrl" alt="照片" />
+    <!-- 文案详情弹窗：自绘卡片（居中定宽 + 限高 + 内部滚动） -->
+    <n-modal v-model:show="showDetail" :mask-closable="true">
+      <div class="detail-card">
+        <div class="detail-card-header">
+          <h3>{{ detailTitle }}</h3>
+          <n-button text size="small" class="detail-close" @click="showDetail = false">
+            <template #icon>
+              <n-icon :component="CloseOutline" />
+            </template>
+          </n-button>
         </div>
+        <div class="detail-card-body">
+          <div v-if="activeDetail" class="detail-content">
+            <img
+              v-if="activeDetail.photo"
+              :src="activeDetail.photo.originalUrl"
+              alt="照片"
+              class="detail-photo"
+            />
 
-        <div class="detail-section">
-          <div class="section-label">短句版</div>
-          <p class="section-text">{{ activeDetail.shortVersion }}</p>
-        </div>
-        <div class="detail-section">
-          <div class="section-label">叙事版</div>
-          <p class="section-text">{{ activeDetail.narrativeVersion }}</p>
-        </div>
-        <div class="detail-section">
-          <div class="section-label">诗意版</div>
-          <p class="section-text poetic">{{ activeDetail.poeticVersion }}</p>
-        </div>
-        <div class="detail-section final">
-          <div class="section-label">我的最终版本</div>
-          <p class="section-text">{{ activeDetail.finalVersion }}</p>
+            <div class="detail-section">
+              <div class="section-label">短句版</div>
+              <p class="section-text">{{ activeDetail.shortVersion }}</p>
+            </div>
+            <div class="detail-section">
+              <div class="section-label">叙事版</div>
+              <p class="section-text">{{ activeDetail.narrativeVersion }}</p>
+            </div>
+            <div class="detail-section">
+              <div class="section-label">诗意版</div>
+              <p class="section-text poetic">{{ activeDetail.poeticVersion }}</p>
+            </div>
+            <div class="detail-section final">
+              <div class="section-label">我的最终版本</div>
+              <p class="section-text">{{ activeDetail.finalVersion }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </n-modal>
@@ -155,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NButton,
@@ -163,26 +140,25 @@ import {
   NIcon,
   NModal,
   NPopconfirm,
-  NSelect,
   NSpin,
   NTag,
   useMessage,
 } from 'naive-ui'
 import {
-  ArrowBackOutline,
   BookmarksOutline,
+  CloseOutline,
   SparklesOutline,
 } from '@vicons/ionicons5'
-import { getJourneys } from '@/api/journey'
 import {
   deleteCopywriting,
   getMyCopywritings,
   type Copywriting,
 } from '@/api/copywriting'
 import type { Mood } from '@/api/diary'
-import { MOOD_OPTIONS, getMoodLabel, getMoodOption } from '@/utils/mood'
-import { SCENE_OPTIONS, getSceneLabel, getSceneOption } from '@/utils/scene'
+import { getMoodLabel, getMoodOption } from '@/utils/mood'
+import { getSceneLabel } from '@/utils/scene'
 import { formatShortDate } from '@/utils/format'
+import AppNavbar from '@/components/AppNavbar.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -190,21 +166,14 @@ const message = useMessage()
 const loading = ref(false)
 const copywritings = ref<Copywriting[]>([])
 
-const filterJourneyId = ref<number | null>(null)
-const filterMood = ref<Mood | null>(null)
-const filterScene = ref<string | null>(null)
+/** 每批渲染的文案数（前端切片，配合“加载更多”避免长列表一次性铺开） */
+const PAGE_SIZE = 12
+const visibleCount = ref(PAGE_SIZE)
+const visibleCopywritings = computed(() => copywritings.value.slice(0, visibleCount.value))
 
-const journeyOptions = ref<{ label: string; value: number }[]>([])
-
-const moodOptions = MOOD_OPTIONS.map((option) => ({
-  label: option.label,
-  value: option.value,
-}))
-
-const sceneOptions = SCENE_OPTIONS.map((option) => ({
-  label: option.label,
-  value: option.value,
-}))
+function loadMore() {
+  visibleCount.value += PAGE_SIZE
+}
 
 const showDetail = ref(false)
 const activeDetail = ref<Copywriting | null>(null)
@@ -215,40 +184,20 @@ const detailTitle = computed(() =>
     : '文案详情',
 )
 
-watch([filterJourneyId, filterMood, filterScene], () => {
-  fetchList()
-})
-
 onMounted(() => {
   fetchList()
-  fetchJourneys()
 })
 
 async function fetchList() {
   loading.value = true
   try {
-    const response = await getMyCopywritings({
-      journeyId: filterJourneyId.value ?? undefined,
-      mood: filterMood.value ?? undefined,
-      sceneTag: filterScene.value ?? undefined,
-    })
+    const response = await getMyCopywritings()
     copywritings.value = response.data
+    visibleCount.value = PAGE_SIZE
   } catch (error) {
     console.error('获取文案列表失败:', error)
   } finally {
     loading.value = false
-  }
-}
-
-async function fetchJourneys() {
-  try {
-    const response = await getJourneys()
-    journeyOptions.value = response.data.map((journey) => ({
-      label: journey.title,
-      value: journey.id,
-    }))
-  } catch (error) {
-    console.error('获取旅程列表失败:', error)
   }
 }
 
@@ -271,15 +220,6 @@ function handleGenerate() {
   router.push('/journeys')
 }
 
-function sceneTagStyle(sceneTag: string) {
-  const option = getSceneOption(sceneTag)
-  if (!option) return {}
-  return {
-    backgroundColor: `${option.color}1A`,
-    color: option.color,
-  }
-}
-
 function moodTagStyle(mood: Mood | null) {
   const option = getMoodOption(mood)
   if (!option) return {}
@@ -296,46 +236,30 @@ function moodTagStyle(mood: Mood | null) {
   background-color: #f7f5f0;
 }
 
-.navbar {
-  background: #fff;
-  border-bottom: 1px solid #e8f0e8;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.navbar-content {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 12px 20px;
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  margin-bottom: 24px;
 }
 
-.page-title {
-  font-weight: 600;
-  font-size: 15px;
+.page-header h2 {
+  font-size: 32px;
   color: #3d3d3d;
-  letter-spacing: 2px;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.page-header p {
+  color: #8fb996;
+  margin: 0;
+  font-size: 15px;
 }
 
 .main-content {
-  max-width: 860px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.filter-select {
-  width: 180px;
+  padding: 32px 40px 60px;
 }
 
 .card-list {
@@ -397,6 +321,11 @@ function moodTagStyle(mood: Mood | null) {
   font-size: 12px;
 }
 
+.scene-tag {
+  background-color: #eef2ee;
+  color: #6b7a6b;
+}
+
 .card-text {
   flex: 1;
   font-size: 14px;
@@ -405,6 +334,7 @@ function moodTagStyle(mood: Mood | null) {
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   cursor: pointer;
@@ -436,6 +366,12 @@ function moodTagStyle(mood: Mood | null) {
   padding: 60px 0;
 }
 
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
 /* ---- 详情弹窗 ---- */
 .detail-content {
   display: flex;
@@ -443,15 +379,50 @@ function moodTagStyle(mood: Mood | null) {
   gap: 16px;
 }
 
-.detail-photo {
-  border-radius: 12px;
+/* ---- 详情弹窗（自绘卡片：居中定宽 + 限高 + 内部滚动） ---- */
+.detail-card {
+  width: 640px;
+  max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
   overflow: hidden;
-  max-height: 320px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
-.detail-photo img {
+.detail-card-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f2f0e9;
+}
+
+.detail-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #3d3d3d;
+}
+
+.detail-close {
+  color: #8fb996;
+}
+
+.detail-card-body {
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.detail-photo {
   width: 100%;
+  height: 300px;
   object-fit: cover;
+  border-radius: 12px;
   display: block;
 }
 
@@ -485,5 +456,22 @@ function moodTagStyle(mood: Mood | null) {
 .detail-section.final {
   background: #f0f5f0;
   border: 1px solid #d4e2d4;
+}
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px 40px;
+  }
+
+  /* 页头标题与“生成文案”按钮竖排 */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  /* 移动端标题字号下调，与「我的旅程」页保持一致 */
+  .page-header h2 {
+    font-size: 26px;
+  }
 }
 </style>

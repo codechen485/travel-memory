@@ -44,10 +44,8 @@ export interface GenerateCopywritingParams {
   photoId?: number
   /** 照片 URL（新上传时后端已返回记录，一般与 photoId 二选一） */
   photoUrl?: string
-  /** 场景标签（海边/山巅/古镇/日落/森林/城市...） */
-  sceneTag: string
-  /** 心情 */
-  mood: Mood
+  /** 心情（可选；场景由 AI 识图自动概括，无需传入） */
+  mood?: Mood
   /** 归属旅程 */
   journeyId?: number
 }
@@ -69,7 +67,6 @@ export interface SaveCopywritingData {
 export interface CopywritingQuery {
   journeyId?: number
   mood?: Mood
-  sceneTag?: string
 }
 
 /**
@@ -97,7 +94,7 @@ export function saveCopywriting(data: SaveCopywritingData) {
 }
 
 /**
- * 我的文案集（支持按旅程/心情/场景筛选）
+ * 我的文案集（支持按旅程/心情筛选）
  *
  * 后端接口：GET /api/copywritings/my
  */
@@ -147,7 +144,6 @@ export function deleteCopywriting(id: number) {
  * 公开文案查询参数（灵感漂流）
  */
 export interface PublicCopywritingQuery {
-  sceneTag?: string
   page?: number
   pageSize?: number
 }
@@ -193,5 +189,23 @@ export function likeCopywriting(id: number) {
 export function collectCopywriting(id: number) {
   return request.post<any, { code: number; message: string; data: null }>(
     `/copywritings/${id}/collect`,
+  )
+}
+
+/**
+ * 收藏列表条目（文案信息 + 收藏时间）
+ */
+export interface CollectedCopywriting extends Copywriting {
+  collectedAt: string
+}
+
+/**
+ * 我的收藏列表（个人中心，按收藏时间降序）
+ *
+ * 后端接口：GET /api/copywritings/collected
+ */
+export function getCollectedCopywritings() {
+  return request.get<any, { code: number; message: string; data: CollectedCopywriting[] }>(
+    '/copywritings/collected',
   )
 }

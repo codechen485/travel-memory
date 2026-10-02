@@ -10,6 +10,8 @@ export const useUserStore = defineStore('user', () => {
   const username = ref<string>(localStorage.getItem('username') || '')
   const email = ref<string>(localStorage.getItem('email') || '')
   const avatar = ref<string | null>(localStorage.getItem('avatar') || null)
+  const nickname = ref<string | null>(localStorage.getItem('nickname') || null)
+  const bio = ref<string | null>(localStorage.getItem('bio') || null)
 
   // 是否已登录
   const isLoggedIn = ref<boolean>(!!token.value)
@@ -71,6 +73,31 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
+   * 同步个人资料（个人中心编辑后调用）
+   */
+  function setProfileInfo(profile: { avatar: string | null; nickname: string | null; bio: string | null }) {
+    avatar.value = profile.avatar
+    nickname.value = profile.nickname
+    bio.value = profile.bio
+
+    if (profile.avatar) {
+      localStorage.setItem('avatar', profile.avatar)
+    } else {
+      localStorage.removeItem('avatar')
+    }
+    if (profile.nickname) {
+      localStorage.setItem('nickname', profile.nickname)
+    } else {
+      localStorage.removeItem('nickname')
+    }
+    if (profile.bio) {
+      localStorage.setItem('bio', profile.bio)
+    } else {
+      localStorage.removeItem('bio')
+    }
+  }
+
+  /**
    * 退出登录
    */
   function logout() {
@@ -88,6 +115,8 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('username')
     localStorage.removeItem('email')
     localStorage.removeItem('avatar')
+    localStorage.removeItem('nickname')
+    localStorage.removeItem('bio')
 
     // 跳转到登录页
     router.push('/login')
@@ -99,9 +128,12 @@ export const useUserStore = defineStore('user', () => {
     username,
     email,
     avatar,
+    nickname,
+    bio,
     isLoggedIn,
     userLogin,
     userRegister,
+    setProfileInfo,
     logout,
   }
 })

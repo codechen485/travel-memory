@@ -4,7 +4,7 @@
     preset="card"
     :title="isEdit ? '编辑旅程' : '创建旅程'"
     class="journey-modal"
-    :style="{ width: '560px' }"
+    :style="{ width: '560px', maxWidth: '92vw' }"
     :mask-closable="false"
     @update:show="handleShowChange"
   >
@@ -63,11 +63,26 @@
       <n-form-item label="封面图" path="coverImage">
         <div class="cover-field">
           <div class="cover-preview" :style="coverStyle">
-            <span v-if="!hasCustomCover">默认封面（图片上传功能开发中）</span>
+            <span v-if="!hasCustomCover">默认封面</span>
+          </div>
+          <div class="cover-actions">
+            <n-upload
+              :show-file-list="false"
+              accept="image/*"
+              :max="1"
+              :custom-request="handleCoverUpload"
+            >
+              <n-button secondary type="primary" :loading="uploading">
+                {{ uploading ? '上传中...' : '上传图片' }}
+              </n-button>
+            </n-upload>
+            <n-button v-if="formData.coverImage" quaternary type="error" @click="clearCover">
+              移除封面
+            </n-button>
           </div>
           <n-input
             v-model:value="formData.coverImage"
-            placeholder="粘贴封面图 URL（可选，留空使用默认封面）"
+            placeholder="或粘贴封面图 URL（可选，留空使用默认封面）"
             clearable
             @update:value="hasCustomCover = !!$event"
           />
@@ -96,16 +111,19 @@ import {
   NButton,
   NDatePicker,
   NDynamicTags,
+  NUpload,
   useMessage,
   type FormInst,
   type FormRules,
   type FormItemRule,
+  type UploadCustomRequestOptions,
 } from 'naive-ui'
 import {
   createJourney,
   updateJourney,
   type Journey,
 } from '@/api/journey'
+import { uploadImage } from '@/api/upload'
 import { getCoverGradient } from '@/utils/format'
 
 const props = defineProps<{
@@ -124,6 +142,7 @@ const formRef = ref<FormInst | null>(null)
 const saving = ref(false)
 const destinationInput = ref('')
 const hasCustomCover = ref(false)
+const uploading = ref(false)
 
 const isEdit = computed(() => !!props.journey)
 
@@ -234,6 +253,41 @@ function handleAddDestination() {
   // 添加事件由输入框回车处理，这里无需额外逻辑
 }
 
+/**
+ * 封面图上传：走通用上传端点，只拿 URL 不创建照片记录
+ */
+async function handleCoverUpload({ file, onFinish, onError }: UploadCustomRequestOptions) {
+  const raw = file.file
+  if (!raw) {
+    onError()
+    return
+  }
+  if (raw.size > 10 * 1024 * 1024) {
+    message.error('图片大小不能超过10MB')
+    onError()
+    return
+  }
+
+  uploading.value = true
+  try {
+    const res = await uploadImage(raw)
+    formData.value.coverImage = res.data.url
+    hasCustomCover.value = true
+    message.success('封面图已上传')
+    onFinish()
+  } catch (error) {
+    console.error('封面图上传失败:', error)
+    onError()
+  } finally {
+    uploading.value = false
+  }
+}
+
+function clearCover() {
+  formData.value.coverImage = ''
+  hasCustomCover.value = false
+}
+
 function close() {
   emit('update:show', false)
 }
@@ -308,6 +362,12 @@ async function handleSubmit() {
   flex-direction: column;
   gap: 10px;
   width: 100%;
+}
+
+.cover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .cover-preview {

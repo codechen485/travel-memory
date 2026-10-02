@@ -8,23 +8,7 @@ export interface GeneratedCopywriting {
   poeticVersion: string;
 }
 
-/** 场景标签 → 中文描述（与前端 src/utils/scene.ts 保持一致） */
-export const SCENE_LABELS: Record<string, string> = {
-  seaside: '海边',
-  mountain: '山巅',
-  old_town: '古镇',
-  sunset: '日落',
-  forest: '森林',
-  city: '城市',
-  lake: '湖畔',
-  snow: '雪景',
-  desert: '沙漠',
-  night: '夜空',
-  street: '街巷',
-  cafe: '小店',
-};
-
-/** 心情 → 中文描述（与 Prisma Mood 枚举一致） */
+/** 心情 → 中文描述（预设 key → 中文；自定义心情原样透传） */
 export const MOOD_LABELS: Record<string, string> = {
   peaceful: '平静',
   amazed: '震撼',
@@ -36,8 +20,11 @@ export const MOOD_LABELS: Record<string, string> = {
   healed: '治愈',
 };
 
-/** Prompt 模板（项目开发文档 8.2，MVP 阶段不接 RAG） */
-function buildPrompt(scene: string, mood: string): { system: string; user: string } {
+/** Prompt 模板：有图时让模型自行观察画面，无图时结合心情自由发挥 */
+function buildPrompt(mood: string, hasImage: boolean): { system: string; user: string } {
+  const sceneGuide = hasImage
+    ? '请先仔细观察所给照片的画面（主体、环境、光线、色彩与氛围），自行识别场景，不要向用户提问。'
+    : '用户未提供照片，请结合其心情自由营造一个具体、可信的旅途画面。';
   return {
     system:
       '你是一位旅行作家，擅长用简洁而富有感染力的语言描述旅途中的风景与心情。' +
@@ -46,9 +33,9 @@ function buildPrompt(scene: string, mood: string): { system: string; user: strin
       '文案中不要出现"AI生成"、"根据您的需求"等字样。' +
       '请严格按照 JSON 格式输出。',
     user:
-      `照片场景：${scene}\n用户心情：${mood}\n\n` +
-      '请根据以上信息，生成3种风格的旅行文案，并以 JSON 对象返回：\n' +
-      '{"scene": "对场景的一句话概括", "shortVersion": "短句版", "narrativeVersion": "叙事版", "poeticVersion": "诗意版"}\n\n' +
+      `${sceneGuide}\n用户心情：${mood}\n\n` +
+      '请据此生成3种风格的旅行文案，并以 JSON 对象返回：\n' +
+      '{"scene": "对画面/场景的一句话概括（10-20字）", "shortVersion": "短句版", "narrativeVersion": "叙事版", "poeticVersion": "诗意版"}\n\n' +
       '各版本要求：\n' +
       '1. 【短句版】15字以内，适合社交媒体配文，简洁有力，有画面感。\n' +
       '2. 【叙事版】100-200字，像一段日记，有细节、有感受、有故事感。\n' +
@@ -78,15 +65,18 @@ export class DeepSeekService {
   /**
    * 调用 DeepSeek API 生成 3 种风格文案
    */
-  async generateCopywriting(sceneTag: string, mood: string): Promise<GeneratedCopywriting> {
+  async generateCopywriting(opts: {
+    mood?: string | null;
+    imageDataUrl?: string | null;
+  }): Promise<GeneratedCopywriting> {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
       throw new ServiceUnavailableException('AI 服务未配置，请联系管理员设置 DEEPSEEK_API_KEY');
     }
 
-    const scene = SCENE_LABELS[sceneTag] ?? sceneTag;
-    const moodLabel = MOOD_LABELS[mood] ?? mood;
-    const { system, user } = buildPrompt(scene, moodLabel);
+    const moodLabel = opts.mood ? (MOOD_LABELS[opts.mood] ?? opts.mood) : '自由发挥';
+    const imageDataUrl = opts.imageDataUrl ?? null;
+    const { system, user } = buildPrompt(moodLabel, !!imageDataUrl);
 
     const baseUrl = process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com';
     const model = process.env.DEEPSEEK_MODEL ?? 'deepseek-chat';
@@ -103,7 +93,15 @@ export class DeepSeekService {
           model,
           messages: [
             { role: 'system', content: system },
-            { role: 'user', content: user },
+            {
+              role: 'user',
+              content: imageDataUrl
+                ? [
+                    { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+                    { type: 'text', text: user },
+                  ]
+                : user,
+            },
           ],
           response_format: { type: 'json_object' },
           temperature: 1.3,
@@ -148,7 +146,10 @@ export class DeepSeekService {
     }
 
     return {
-      scene: typeof parsed.scene === 'string' ? parsed.scene : scene,
+      scene:
+        typeof parsed.scene === 'string' && parsed.scene.trim()
+          ? parsed.scene.trim()
+          : '旅途瞬间',
       shortVersion: normalizeText(shortVersion),
       narrativeVersion: normalizeText(narrativeVersion),
       poeticVersion: normalizeText(poeticVersion),

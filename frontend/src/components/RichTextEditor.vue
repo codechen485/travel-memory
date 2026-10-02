@@ -1,13 +1,15 @@
 <template>
   <div class="rich-editor">
     <Toolbar :editor="editorRef" :defaultConfig="toolbarConfig" :mode="mode" class="editor-toolbar" />
-    <Editor
-      v-model="valueHtml"
-      :defaultConfig="editorConfig"
-      :mode="mode"
-      class="editor-content"
-      @onCreated="handleCreated"
-    />
+    <!-- 用自有 div 承载高度，避免依赖 Editor 组件根节点继承 class -->
+    <div class="editor-content">
+      <Editor
+        v-model="valueHtml"
+        :defaultConfig="editorConfig"
+        :mode="mode"
+        @onCreated="handleCreated"
+      />
+    </div>
   </div>
 </template>
 
@@ -112,18 +114,22 @@ onBeforeUnmount(() => {
 .rich-editor {
   border: 1px solid #dcdfe6;
   border-radius: 8px;
-  overflow: hidden;
+  /* 不能 overflow:hidden，否则工具栏下拉面板（标题/表情等）会被裁切 */
+  overflow: visible;
+  background-color: #fff;
 }
 
 .editor-toolbar {
   border-bottom: 1px solid #e8e8e8;
   background-color: #fafafa;
+  border-radius: 8px 8px 0 0;
 }
 
 .editor-content {
   height: 320px;
-  overflow-y: auto;
   background-color: #fff;
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
 }
 
 :deep(.editor-content .w-e-text-container) {

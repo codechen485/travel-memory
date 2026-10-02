@@ -1,30 +1,8 @@
 <template>
   <div class="journey-list-container">
     <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="logo">
-          <h1 @click="router.push('/')">🌿 行囊</h1>
-        </div>
-
-        <div class="nav-actions">
-          <n-button quaternary @click="router.push('/')">
-            <template #icon>
-              <n-icon :component="HomeOutline" />
-            </template>
-            首页
-          </n-button>
-          <n-dropdown :options="dropdownOptions" @select="handleDropdownSelect">
-            <n-button type="primary" size="small">
-              {{ userStore.username }}
-              <template #icon>
-                <n-icon :component="ChevronDownOutline" />
-              </template>
-            </n-button>
-          </n-dropdown>
-        </div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件） -->
+    <AppNavbar />
 
     <!-- 主要内容区 -->
     <main class="main-content">
@@ -45,7 +23,7 @@
         <!-- 旅程卡片网格 -->
         <div v-if="journeys.length > 0" class="journeys-grid">
           <div
-            v-for="journey in journeys"
+            v-for="journey in visibleJourneys"
             :key="journey.id"
             class="journey-card"
             @click="goDetail(journey.id)"
@@ -141,6 +119,13 @@
             </template>
           </n-empty>
         </div>
+
+        <!-- 加载更多：前端切片分批渲染，避免一次性铺开全部卡片把页面拉得过长 -->
+        <div v-if="journeys.length > visibleCount" class="load-more">
+          <n-button @click="loadMore">
+            加载更多（还有 {{ journeys.length - visibleCount }} 段）
+          </n-button>
+        </div>
       </n-spin>
     </main>
 
@@ -154,11 +139,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NButton,
-  NDropdown,
   NEmpty,
   NIcon,
   NPopconfirm,
@@ -169,30 +153,36 @@ import {
 import {
   AddOutline,
   CalendarOutline,
-  ChevronDownOutline,
   CreateOutline,
   DocumentTextOutline,
-  HomeOutline,
   ImageOutline,
   MapOutline,
   TrashOutline,
 } from '@vicons/ionicons5'
 import { deleteJourney, getJourneys, type Journey } from '@/api/journey'
-import { useUserStore } from '@/stores/user'
 import { daysBetween, formatDate, getCoverGradient } from '@/utils/format'
 import JourneyFormModal from '@/components/JourneyFormModal.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
 
 const route = useRoute()
 const router = useRouter()
-const userStore = useUserStore()
 const message = useMessage()
+
+/** 每批渲染的旅程数（前端切片，配合“加载更多”避免长列表一次性铺开） */
+const PAGE_SIZE = 12
 
 const journeys = ref<Journey[]>([])
 const loading = ref(false)
 const showFormModal = ref(false)
 const editingJourney = ref<Journey | null>(null)
 
-const dropdownOptions = [{ label: '退出登录', key: 'logout' }]
+/** 当前展示条数 + 切片后的可见旅程 */
+const visibleCount = ref(PAGE_SIZE)
+const visibleJourneys = computed(() => journeys.value.slice(0, visibleCount.value))
+
+function loadMore() {
+  visibleCount.value += PAGE_SIZE
+}
 
 onMounted(() => {
   fetchJourneys()
@@ -207,6 +197,7 @@ async function fetchJourneys() {
   try {
     const response = await getJourneys()
     journeys.value = response.data
+    visibleCount.value = PAGE_SIZE
   } catch (error) {
     console.error('获取旅程列表失败:', error)
   } finally {
@@ -248,13 +239,6 @@ async function handleDelete(id: number) {
     console.error('删除旅程失败:', error)
   }
 }
-
-function handleDropdownSelect(key: string) {
-  if (key === 'logout') {
-    userStore.logout()
-    message.success('已退出登录')
-  }
-}
 </script>
 
 <style scoped>
@@ -263,41 +247,11 @@ function handleDropdownSelect(key: string) {
   background-color: #f7f5f0;
 }
 
-/* 导航栏 */
-.navbar {
-  background-color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 0 40px;
-}
-
-.navbar-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo h1 {
-  font-size: 24px;
-  color: #5b8c5a;
-  margin: 0;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 /* 主要内容区 */
 .main-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px;
+  padding: 32px 40px 60px;
 }
 
 .page-header {
@@ -422,5 +376,35 @@ function handleDropdownSelect(key: string) {
   padding: 80px 0;
   display: flex;
   justify-content: center;
+}
+
+/* 加载更多 */
+.load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
+}
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px 40px;
+  }
+
+  /* 页头标题与操作按钮竖排，避免 space-between 在窄屏挤压 */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .page-header h2 {
+    font-size: 26px;
+  }
+
+  /* 卡片网格：320px 最小列宽在手机上会溢出，改单列自适应 */
+  .journeys-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 }
 </style>

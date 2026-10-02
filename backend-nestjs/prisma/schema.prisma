@@ -16,29 +16,20 @@ enum JourneyStatus {
   archived
 }
 
-/// 心情枚举（8 种）
-enum Mood {
-  peaceful
-  amazed
-  miss
-  relieved
-  expect
-  reluctant
-  free
-  healed
-}
-
 model User {
   id        Int       @id @default(autoincrement())
   username  String    @unique @db.VarChar(50)
   email     String    @unique @db.VarChar(100)
   password  String    @db.VarChar(255)
   avatar    String?   @db.VarChar(500)
+  nickname  String?   @db.VarChar(50)
+  bio       String?   @db.VarChar(200)
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   journeys     Journey[]
   copywritings Copywriting[]
+  collects     Collect[]
 
   @@map("users")
 }
@@ -74,10 +65,8 @@ model Diary {
   date        DateTime @db.Date
   title       String   @db.VarChar(200)
   content     String   @db.Text
-  mood        Mood?
+  mood        String?  @db.VarChar(20)
   locationName String? @db.VarChar(200) @map("location_name")
-  latitude    Decimal? @db.Decimal(10, 7)
-  longitude   Decimal? @db.Decimal(10, 7)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -121,7 +110,7 @@ model Copywriting {
   photoId          Int?     @map("photo_id")
   journeyId        Int      @map("journey_id")
   sceneTag         String   @db.VarChar(50) @map("scene_tag")
-  mood             Mood?
+  mood             String?  @db.VarChar(20)
   shortVersion     String   @map("short_version") @db.Text
   narrativeVersion String   @map("narrative_version") @db.Text
   poeticVersion    String   @map("poetic_version") @db.Text
@@ -134,6 +123,7 @@ model Copywriting {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   photo   Photo?  @relation(fields: [photoId], references: [id], onDelete: SetNull)
   journey Journey @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  collects Collect[]
 
   @@index([userId])
   @@index([photoId])
@@ -142,4 +132,20 @@ model Copywriting {
   @@index([mood])
   @@index([isPublic])
   @@map("copywritings")
+}
+
+/// 文案收藏（灵感漂流）
+model Collect {
+  id            Int        @id @default(autoincrement())
+  userId        Int        @map("user_id")
+  copywritingId Int        @map("copywriting_id")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  copywriting Copywriting @relation(fields: [copywritingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, copywritingId])
+  @@index([userId])
+  @@index([copywritingId])
+  @@map("collects")
 }

@@ -1,42 +1,37 @@
 <template>
   <div class="journey-detail-container">
-    <!-- 导航栏 -->
-    <nav class="navbar">
-      <div class="navbar-content">
-        <div class="nav-left">
-          <n-button quaternary size="small" @click="router.push('/journeys')">
-            <template #icon>
-              <n-icon :component="ArrowBackOutline" />
-            </template>
-            我的旅程
-          </n-button>
-        </div>
-
-        <div class="nav-actions">
-          <n-button quaternary size="small" @click="openEditModal">
-            <template #icon>
-              <n-icon :component="CreateOutline" />
-            </template>
-            编辑
-          </n-button>
-          <n-button
-            v-if="journey && journey.status === 'ongoing'"
-            quaternary
-            size="small"
-            type="warning"
-            @click="handleArchive"
-          >
-            <template #icon>
-              <n-icon :component="ArchiveOutline" />
-            </template>
-            封存
-          </n-button>
-          <n-tag v-else-if="journey" type="warning" size="small" round>已封存</n-tag>
-        </div>
-      </div>
-    </nav>
+    <!-- 导航栏（全局组件，页面操作放入 actions 插槽） -->
+    <AppNavbar>
+      <template #actions>
+        <n-button quaternary size="small" @click="openEditModal">
+          <template #icon>
+            <n-icon :component="CreateOutline" />
+          </template>
+          编辑
+        </n-button>
+        <n-button
+          v-if="journey && journey.status === 'ongoing'"
+          quaternary
+          size="small"
+          type="warning"
+          @click="handleArchive"
+        >
+          <template #icon>
+            <n-icon :component="ArchiveOutline" />
+          </template>
+          封存
+        </n-button>
+        <n-tag v-else-if="journey" type="warning" size="small" round>已封存</n-tag>
+      </template>
+    </AppNavbar>
 
     <main class="main-content">
+      <n-button quaternary size="small" class="back-link" @click="router.push('/journeys')">
+        <template #icon>
+          <n-icon :component="ArrowBackOutline" />
+        </template>
+        我的旅程
+      </n-button>
       <n-spin :show="loading">
         <template v-if="journey">
           <!-- 顶部：封面 + 标题 + 日期 + 统计 -->
@@ -85,7 +80,7 @@
             </div>
           </header>
 
-          <!-- Tab 切换：时间线 / 地图 / 手帐 -->
+          <!-- Tab 切换：时间线 / 手帐 -->
           <div class="detail-body">
             <n-tabs type="line" animated default-value="timeline">
               <!-- 时间线视图 -->
@@ -219,14 +214,33 @@
                 </n-empty>
               </n-tab-pane>
 
-              <!-- 地图视图：Leaflet 轨迹 -->
-              <n-tab-pane name="map" tab="地图">
-                <JourneyMap :journey="journey" />
-              </n-tab-pane>
-
               <!-- 手帐视图：电子手帐翻页 -->
               <n-tab-pane name="album" tab="手帐">
                 <JourneyJournal :journey="journey" />
+              </n-tab-pane>
+
+              <!-- 文案视图：本旅程产出的文案（生成闭环） -->
+              <n-tab-pane name="copywriting" tab="文案">
+                <div v-if="copywritings.length > 0" class="cw-list">
+                  <article v-for="item in copywritings" :key="item.id" class="cw-card">
+                    <p class="cw-text">{{ item.finalVersion }}</p>
+                    <div class="cw-tags">
+                      <span v-if="item.sceneTag" class="cw-tag">{{ getSceneLabel(item.sceneTag) }}</span>
+                      <span v-if="item.mood" class="cw-tag mood">{{ getMoodLabel(item.mood) }}</span>
+                      <n-tag v-if="item.isPublic" size="tiny" round :bordered="false" type="success">
+                        已公开
+                      </n-tag>
+                      <span class="cw-date">{{ formatShortDate(item.createdAt) }}</span>
+                    </div>
+                  </article>
+                </div>
+                <n-empty v-else description="还没有为这段旅程写文案">
+                  <template #extra>
+                    <n-button size="small" @click="handleGenerateCopywriting()">
+                      去生成第一条
+                    </n-button>
+                  </template>
+                </n-empty>
               </n-tab-pane>
             </n-tabs>
           </div>
@@ -283,6 +297,8 @@ import {
 import { archiveJourney, getJourney, type JourneyDetail } from '@/api/journey'
 import type { Diary } from '@/api/diary'
 import { getMoodLabel, getMoodOption } from '@/utils/mood'
+import { getSceneLabel } from '@/utils/scene'
+import { getMyCopywritings, type Copywriting } from '@/api/copywriting'
 import {
   daysBetween,
   formatDate,
@@ -292,8 +308,8 @@ import {
   stripHtml,
 } from '@/utils/format'
 import JourneyFormModal from '@/components/JourneyFormModal.vue'
-import JourneyMap from '@/components/JourneyMap.vue'
 import JourneyJournal from '@/components/JourneyJournal.vue'
+import AppNavbar from '@/components/AppNavbar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +319,7 @@ const dialog = useDialog()
 const journey = ref<JourneyDetail | null>(null)
 const loading = ref(false)
 const showEditModal = ref(false)
+const copywritings = ref<Copywriting[]>([])
 
 /** 按日期降序分组的日记 */
 interface DiaryGroup {
@@ -366,10 +383,21 @@ async function fetchDetail() {
   try {
     const response = await getJourney(id)
     journey.value = response.data
+    fetchCopywritings(id)
   } catch (error) {
     console.error('获取旅程详情失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+/** 拉取本旅程的文案（生成保存后回到本页即可见，闭环） */
+async function fetchCopywritings(journeyId: number) {
+  try {
+    const response = await getMyCopywritings({ journeyId })
+    copywritings.value = response.data
+  } catch (error) {
+    console.error('获取旅程文案失败:', error)
   }
 }
 
@@ -430,26 +458,9 @@ function handleArchive() {
   background-color: #f7f5f0;
 }
 
-/* 导航栏 */
-.navbar {
-  background-color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  padding: 0 40px;
-}
-
-.navbar-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.back-link {
+  margin-bottom: 16px;
+  color: #8fb996;
 }
 
 /* 主要内容区 */
@@ -680,5 +691,61 @@ function handleArchive() {
 
 .timeline-empty {
   padding: 80px 0;
+}
+/* ---- 本旅程文案（文案 Tab） ---- */
+.cw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cw-card {
+  background: #faf9f6;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.cw-text {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #3d3d3d;
+  white-space: pre-wrap;
+  margin: 0 0 10px 0;
+}
+
+.cw-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cw-tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background-color: #eef2ee;
+  color: #6b7a6b;
+}
+
+.cw-tag.mood {
+  background-color: rgba(91, 140, 90, 0.1);
+  color: #5b8c5a;
+}
+
+.cw-date {
+  font-size: 12px;
+  color: #9aa89a;
+}
+@media (max-width: 768px) {
+  .main-content {
+    padding: 20px 16px 40px;
+  }
+
+  /* 日记卡头部（标题/心情 与 操作按钮）窄屏换行 */
+  .diary-card-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 </style>
