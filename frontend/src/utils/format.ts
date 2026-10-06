@@ -1,10 +1,26 @@
 /**
+ * 解析日期字符串为 Date：
+ * - 纯 yyyy-MM-dd 按「本地时间」构造，规避 JS 把无时区的日期串当作 UTC 午夜、
+ *   再用本地 getter 读取时跨时区整体偏一天（负时区尤其明显）
+ * - 含时间/时区的完整 ISO 串仍走 new Date（对绝对时刻做本地化展示，符合预期）
+ */
+function parseDate(dateStr: string): Date | null {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, mo, d] = dateStr.split('-').map(Number)
+    const date = new Date(y as number, (mo as number) - 1, d as number)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+  const date = new Date(dateStr)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
  * 日期格式化：yyyy-MM-dd → yyyy年M月d日
  */
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
+  const date = parseDate(dateStr)
+  if (!date) return dateStr
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`
 }
 
@@ -13,8 +29,8 @@ export function formatDate(dateStr: string | null | undefined): string {
  */
 export function formatShortDate(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
+  const date = parseDate(dateStr)
+  if (!date) return dateStr
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
@@ -24,8 +40,8 @@ export function formatShortDate(dateStr: string | null | undefined): string {
 export function formatWeekday(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
   const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return ''
+  const date = parseDate(dateStr)
+  if (!date) return ''
   const weekday = weekdays[date.getDay()]
   return weekday ?? ''
 }

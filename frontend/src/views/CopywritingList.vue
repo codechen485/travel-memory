@@ -10,12 +10,6 @@
           <h2>我的文案集</h2>
           <p>把每一次心动，写成可以带走的句子</p>
         </div>
-        <n-button type="primary" @click="handleGenerate">
-          <template #icon>
-            <n-icon :component="SparklesOutline" />
-          </template>
-          生成新文案
-        </n-button>
       </div>
 
       <n-spin :show="loading">
@@ -71,11 +65,6 @@
         <n-empty v-else-if="!loading" class="list-empty" description="还没有保存的文案">
           <template #icon>
             <n-icon :component="BookmarksOutline" :size="48" color="#A8C5A8" />
-          </template>
-          <template #extra>
-            <n-button size="small" type="primary" @click="handleGenerate">
-              去生成第一条文案
-            </n-button>
           </template>
         </n-empty>
 
@@ -133,7 +122,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   NButton,
   NEmpty,
@@ -147,7 +135,6 @@ import {
 import {
   BookmarksOutline,
   CloseOutline,
-  SparklesOutline,
 } from '@vicons/ionicons5'
 import {
   deleteCopywriting,
@@ -160,7 +147,6 @@ import { getSceneLabel } from '@/utils/scene'
 import { formatShortDate } from '@/utils/format'
 import AppNavbar from '@/components/AppNavbar.vue'
 
-const router = useRouter()
 const message = useMessage()
 
 const loading = ref(false)
@@ -214,10 +200,6 @@ async function handleDelete(id: number) {
   } catch (error) {
     console.error('删除文案失败:', error)
   }
-}
-
-function handleGenerate() {
-  router.push('/journeys')
 }
 
 function moodTagStyle(mood: Mood | null) {

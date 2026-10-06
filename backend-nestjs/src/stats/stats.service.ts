@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../cache/cache.service';
 
 /** 心情中文标签（与前端 utils/mood.ts 保持一致） */
 const MOOD_LABELS: Record<string, string> = {
@@ -15,12 +16,22 @@ const MOOD_LABELS: Record<string, string> = {
 
 @Injectable()
 export class StatsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   /**
    * 我的旅行统计：总览 + 城市足迹 + 心情分布 + 每月旅程数
+   * 聚合查询较重且读多写少，用 Redis 缓存 60s（数据变更后最多 1 分钟最终一致）。
    */
   async getMyStats(userId: number) {
+    return this.cache.remember(`stats:user:${userId}`, 60, () =>
+      this.computeStats(userId),
+    );
+  }
+
+  private async computeStats(userId: number) {
     const journeys = await this.prisma.journey.findMany({
       where: { userId },
       select: {

@@ -125,7 +125,9 @@ const router = useRouter()
 const message = useMessage()
 
 const formRef = ref<FormInst | null>(null)
-const loading = ref(false)
+// 初始即置为加载中：避免表单（含 wangEditor）先闪现挂载、再因 onMounted 里的
+// 异步加载/缺参重定向立刻卸载，触发编辑器 “Can not get editor instance” 卸载报错
+const loading = ref(true)
 const saving = ref(false)
 
 const isEdit = computed(() => route.name === 'DiaryEdit')

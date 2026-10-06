@@ -3,6 +3,7 @@ import path from 'path';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeepSeekService } from './deepseek.service';
+import { CacheService } from '../cache/cache.service';
 import { CreateCopywritingDto, GenerateCopywritingDto, UpdateCopywritingDto } from './dto/create-copywriting.dto';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class CopywritingService {
   constructor(
     private prisma: PrismaService,
     private deepSeek: DeepSeekService,
+    private cache: CacheService,
   ) {}
 
   /**
@@ -80,7 +82,7 @@ export class CopywritingService {
       }
     }
 
-    return this.prisma.copywriting.create({
+    const created = await this.prisma.copywriting.create({
       data: {
         userId,
         journeyId: dto.journeyId,
@@ -95,6 +97,8 @@ export class CopywritingService {
       },
       include: { photo: true, journey: { select: { id: true, title: true } } },
     });
+    if (created.isPublic) await this.invalidatePublicCache();
+    return created;
   }
 
   /**
@@ -143,29 +147,39 @@ export class CopywritingService {
     if (dto.sceneTag !== undefined) data.sceneTag = dto.sceneTag;
     if (dto.mood !== undefined) data.mood = dto.mood;
 
-    return this.prisma.copywriting.update({
+    const updated = await this.prisma.copywriting.update({
       where: { id },
       data,
       include: { photo: true, journey: { select: { id: true, title: true } } },
     });
+    // 公开状态/内容变化都可能影响灵感漂流列表，保守失效
+    if (updated.isPublic || dto.isPublic !== undefined) await this.invalidatePublicCache();
+    return updated;
   }
 
   /**
    * 删除文案
    */
   async remove(userId: number, id: number) {
-    await this.findOne(userId, id);
+    const target = await this.findOne(userId, id);
     await this.prisma.copywriting.delete({ where: { id } });
+    if (target.isPublic) await this.invalidatePublicCache();
     return null;
   }
 
   /**
    * 灵感漂流：公开文案分页列表（不返回用户信息，匿名展示）
+   * 匿名高频读、翻页重复命中率高，用 Redis 缓存 30s；任何影响列表的写操作会主动失效。
    */
   async findPublic(query: { page?: number; pageSize?: number }) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
+    return this.cache.remember(`cp:public:p${page}:s${pageSize}`, 30, () =>
+      this.queryPublic(page, pageSize),
+    );
+  }
 
+  private async queryPublic(page: number, pageSize: number) {
     const where = {
       isPublic: true,
     };
@@ -201,6 +215,11 @@ export class CopywritingService {
     return { list, total, page, pageSize };
   }
 
+  /** 失效全部公开文案列表缓存（分页键前缀匹配） */
+  private invalidatePublicCache() {
+    return this.cache.delPattern('cp:public:*');
+  }
+
   /**
    * 点赞公开文案（likesCount +1）
    */
@@ -217,6 +236,8 @@ export class CopywritingService {
       data: { likesCount: { increment: 1 } },
     });
 
+    // 点赞数影响列表排序（orderBy likesCount），失效缓存
+    await this.invalidatePublicCache();
     return { likesCount: updated.likesCount };
   }
 
