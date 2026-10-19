@@ -10,6 +10,8 @@ import { PhotoModule } from './photo/photo.module';
 import { CopywritingModule } from './copywriting/copywriting.module';
 import { StatsModule } from './stats/stats.module';
 import { UserModule } from './user/user.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { PhotoUrlInterceptor } from './photo/photo-url.interceptor';
 
 @Module({
   imports: [
@@ -28,6 +30,6 @@ import { UserModule } from './user/user.module';
     UserModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: PhotoUrlInterceptor }],
 })
 export class AppModule {}

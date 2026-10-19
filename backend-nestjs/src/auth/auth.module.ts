@@ -13,7 +13,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'defaultSecret',
+        secret: requireJwtSecret(configService),
         signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '24h' },
       } as any),
       inject: [ConfigService],
@@ -24,3 +24,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   exports: [AuthService],
 })
 export class AuthModule {}
+
+function requireJwtSecret(configService: ConfigService): string {
+  const secret = configService.get<string>('JWT_SECRET');
+  if (!secret || secret.length < 32 || /(defaultsecret|change-me|replace-with|your-secret)/i.test(secret)) {
+    throw new Error('JWT_SECRET must be configured with at least 32 characters');
+  }
+  return secret;
+}

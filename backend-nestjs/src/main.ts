@@ -1,7 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
@@ -13,8 +12,10 @@ async function bootstrap() {
   app.use(compression());
 
   // 启用 CORS
+  const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+    .split(',').map((origin) => origin.trim()).filter(Boolean);
   app.enableCors({
-    origin: '*',
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['*'],
   });
@@ -27,11 +28,6 @@ async function bootstrap() {
       transform: true,
     }),
   );
-
-  // 静态资源服务：/uploads → 项目根目录 uploads 文件夹（照片原图与缩略图）
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
-  });
 
   // 全局异常过滤器
   app.useGlobalFilters(new AllExceptionsFilter());

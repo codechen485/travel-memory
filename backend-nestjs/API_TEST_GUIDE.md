@@ -8,8 +8,8 @@
 # 1) 起数据库（Redis 可选）
 docker-compose up -d
 
-# 2) 同步表结构
-npx prisma db push
+# 2) 应用数据库迁移（只对空库首次执行；已有 db push 数据库需先 baseline）
+npx prisma migrate deploy
 
 # 3) 启动后端
 npm run start:dev
@@ -121,8 +121,8 @@ curl -X POST http://localhost:3000/api/photos/upload \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@/path/to/photo.jpg" -F "journeyId=1" -F "diaryId=1"
 ```
-- 后端用 sharp 生成 480px 缩略图、读取宽高，并尝试提取 EXIF GPS（无 EXIF 静默跳过）
-- 返回的 `/uploads/xxx.jpg` 为相对路径，静态托管于后端；上传到不存在旅程 404、未传文件 400
+- 上传上限 10MB；仅接收 JPEG/PNG/WebP/GIF，Sharp 验证后旋转并重新编码成 JPEG，剥除图片内嵌 EXIF/GPS 元数据，同时在数据库保存读取到的拍摄时间和坐标。
+- API 返回 15 分钟有效的签名图片 URL。`/uploads` 不再作为公开静态目录提供；上传到不存在旅程 404、未传文件 400。
 
 ---
 
@@ -204,7 +204,8 @@ curl -X PUT http://localhost:3000/api/users/profile \
 
 1. **JWT 有效期** 24h（`.env` 配 `JWT_EXPIRES_IN`）。
 2. **密码加密** BCrypt。
-3. **CORS** 开发放行所有来源；生产建议在后端 `main.ts` 收紧为具体前端域名（见部署指南）。
+3. **CORS** 由 `FRONTEND_ORIGIN` 配置，多个来源用逗号分隔；默认仅允许本地前端 `http://localhost:5173`。
 4. **公开接口** 仅 `/api/health`、`/api/auth/*` 免鉴权，其余必须带 token。
-5. **数据库同步** `npx prisma db push`。
-6. **接口自测**：服务层单元测试 `npm test`（Vitest，39 例，覆盖认证/旅程/统计/AI解析/文案业务规则）。
+5. **本地数据库同步**：新环境运行 `npx prisma migrate deploy`；开发期间 schema 变更用 `npx prisma migrate dev --name <描述>`。
+6. **单元测试**：`npm test`（Vitest，覆盖认证/旅程/统计/AI解析/文案/签名链接规则）。
+7. **端到端测试**：另建空 PostgreSQL 测试库，将 `TEST_DATABASE_URL` 指向该库后运行 `npm run test:e2e`。该测试会注册两个用户、创建旅程并验证跨用户读取被拒绝；未配置测试库时会跳过。

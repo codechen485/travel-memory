@@ -4,6 +4,8 @@ import { JourneyService } from './journey.service';
 
 describe('JourneyService', () => {
   const prisma = {
+    photo: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn() },
     journey: {
       create: vi.fn(),
       findMany: vi.fn(),

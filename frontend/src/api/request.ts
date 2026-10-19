@@ -9,6 +9,21 @@ const request = axios.create({
   timeout: 10000,
 })
 
+function resolveProtectedImageLinks(value: unknown): unknown {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+  const origin = apiBase.replace(/\/api\/?$/, '')
+  if (typeof value === 'string') {
+    return value.replace(/\/api\/photo-files\//g, `${origin}/api/photo-files/`)
+  }
+  if (Array.isArray(value)) return value.map(resolveProtectedImageLinks)
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      ;(value as Record<string, unknown>)[key] = resolveProtectedImageLinks(child)
+    }
+  }
+  return value
+}
+
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
@@ -27,7 +42,7 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {
-    const res = response.data
+    const res = resolveProtectedImageLinks(response.data) as typeof response.data
 
     // 如果返回的状态码不是 200，说明接口有问题
     if (res.code !== 200) {

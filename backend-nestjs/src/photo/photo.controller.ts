@@ -30,6 +30,11 @@ interface AuthenticatedRequest extends ExpressRequest {
 
 /** 上传大小限制 10MB（与前端校验保持一致） */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const imageFileFilter = (_req: unknown, file: { mimetype: string }, callback: (error: Error | null, acceptFile: boolean) => void) => {
+  const accepted = IMAGE_MIME_TYPES.has(file.mimetype);
+  callback(accepted ? null : new BadRequestException('仅支持 JPEG、PNG、WebP、GIF 图片'), accepted);
+};
 
 /** 上传文件的最小结构（与 multer 的 File 兼容） */
 interface UploadedFileShape {
@@ -45,7 +50,7 @@ export class PhotoController {
   constructor(private readonly photoService: PhotoService) {}
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE, files: 1 }, fileFilter: imageFileFilter }))
   async upload(
     @Request() req: AuthenticatedRequest,
     @UploadedFile() file: UploadedFileShape,
@@ -74,7 +79,7 @@ export class PhotoController {
 
   /** 通用图片上传（旅程封面/头像等）：只存文件返回 URL，不创建照片记录 */
   @Post('upload-image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE, files: 1 }, fileFilter: imageFileFilter }))
   async uploadImage(@UploadedFile() file: UploadedFileShape) {
     if (!file) {
       throw new BadRequestException('请上传图片文件');

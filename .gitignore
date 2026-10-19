@@ -22,6 +22,8 @@ Thumbs.db
 docs/开发行动指南.md
 docs/项目开发文档.md
 docs/部署上线指南.md
+docs/安全加固与验证记录.md
+docs/项目理解文档.md
 backend-nestjs/后端完成进度.md
 backend-nestjs/快速启动指南.md
 frontend/前端完成进度.md

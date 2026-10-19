@@ -44,7 +44,8 @@ export class CopywritingService {
   /** 把 /uploads/xxx 的本地照片读成 base64 data URL；读取失败时返回 null（降级为纯文本） */
   private async toImageDataUrl(url: string): Promise<string | null> {
     try {
-      const filePath = path.join(process.cwd(), 'uploads', path.basename(url));
+      const filename = path.basename(url.split('?')[0] ?? url);
+      const filePath = path.join(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'), filename);
       const buffer = await fs.readFile(filePath);
       const ext = path.extname(filePath).toLowerCase();
       const mime =

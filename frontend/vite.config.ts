@@ -47,13 +47,4 @@ export default defineConfig({
       },
     },
   },
-  server: {
-    proxy: {
-      // 后端静态资源（上传图片）：浏览器请求前端 /uploads → 转发到后端 3000 端口
-      '/uploads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
-  },
 })

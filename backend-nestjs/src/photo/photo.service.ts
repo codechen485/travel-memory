@@ -18,20 +18,20 @@ interface UploadedFile {
   originalname: string;
 }
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+const UPLOAD_DIR = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
 const THUMB_MAX_WIDTH = 480;
-
-/** 图片 MIME → 扩展名映射 */
-const MIME_EXT: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-};
 
 @Injectable()
 export class PhotoService {
   constructor(private prisma: PrismaService) {}
+
+  async readStoredFile(filename: string): Promise<Buffer> {
+    try {
+      return await fs.readFile(path.join(UPLOAD_DIR, path.basename(filename)));
+    } catch {
+      throw new NotFoundException('照片不存在');
+    }
+  }
 
   /**
    * 上传照片：本地存储 + sharp 生成缩略图 + 写入数据库
@@ -45,9 +45,7 @@ export class PhotoService {
     if (!file) {
       throw new BadRequestException('请上传图片文件');
     }
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('仅支持图片文件');
-    }
+    const encoded = await this.validateAndSanitize(file);
 
     // 校验旅程归属
     const journey = await this.prisma.journey.findFirst({
@@ -73,15 +71,14 @@ export class PhotoService {
     await this.ensureUploadDir();
 
     // 生成唯一文件名
-    const ext = MIME_EXT[file.mimetype] ?? 'jpg';
     const baseName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const originalName = `${baseName}.${ext}`;
+    const originalName = `${baseName}.jpg`;
     const thumbName = `thumb_${baseName}.jpg`;
     const originalPath = path.join(UPLOAD_DIR, originalName);
     const thumbPath = path.join(UPLOAD_DIR, thumbName);
 
     // 写入原图
-    await fs.writeFile(originalPath, file.buffer);
+    await fs.writeFile(originalPath, encoded);
 
     // 生成缩略图并读取元信息（含 EXIF GPS / 拍摄时间）
     let width: number | null = null;
@@ -90,11 +87,11 @@ export class PhotoService {
     let longitude: number | null = null;
     let exifTakenAt: Date | null = null;
     try {
-      const meta = await sharp(file.buffer).metadata();
+      const meta = await sharp(encoded).metadata();
       width = meta.width ?? null;
       height = meta.height ?? null;
 
-      await sharp(file.buffer)
+      await sharp(encoded)
         .resize({ width: THUMB_MAX_WIDTH, withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(thumbPath);
@@ -114,26 +111,32 @@ export class PhotoService {
           exifTakenAt = takenAt;
         }
       }
-    } catch (error) {
-      console.error('缩略图生成失败，回退使用原图:', error);
-      // 缩略图生成失败时，复制原图作为缩略图
-      await fs.copyFile(originalPath, thumbPath);
+    } catch {
+      await this.safeUnlink(originalPath);
+      await this.safeUnlink(thumbPath);
+      throw new BadRequestException('图片处理失败，请确认文件是有效图片');
     }
 
-    return this.prisma.photo.create({
-      data: {
-        journeyId,
-        diaryId: diaryId ?? null,
-        originalUrl: `/uploads/${originalName}`,
-        thumbnailUrl: `/uploads/${thumbName}`,
-        width,
-        height,
-        fileSize: file.size,
-        latitude,
-        longitude,
-        exifTakenAt,
-      },
-    });
+    try {
+      return await this.prisma.photo.create({
+        data: {
+          journeyId,
+          diaryId: diaryId ?? null,
+          originalUrl: `/uploads/${originalName}`,
+          thumbnailUrl: `/uploads/${thumbName}`,
+          width,
+          height,
+          fileSize: file.size,
+          latitude,
+          longitude,
+          exifTakenAt,
+        },
+      });
+    } catch (error) {
+      await this.safeUnlink(originalPath);
+      await this.safeUnlink(thumbPath);
+      throw error;
+    }
   }
 
   /**
@@ -143,16 +146,13 @@ export class PhotoService {
     if (!file) {
       throw new BadRequestException('请上传图片文件');
     }
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('仅支持图片文件');
-    }
+    const encoded = await this.validateAndSanitize(file);
 
     await this.ensureUploadDir();
 
-    const ext = MIME_EXT[file.mimetype] ?? 'jpg';
     const baseName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const originalName = `${baseName}.${ext}`;
-    await fs.writeFile(path.join(UPLOAD_DIR, originalName), file.buffer);
+    const originalName = `${baseName}.jpg`;
+    await fs.writeFile(path.join(UPLOAD_DIR, originalName), encoded);
 
     return { url: `/uploads/${originalName}` };
   }
@@ -196,17 +196,30 @@ export class PhotoService {
   }
 
   private async ensureUploadDir() {
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+  }
+
+  /** Validate actual image bytes, cap decompression work, and strip GPS/EXIF from stored files. */
+  private async validateAndSanitize(file: UploadedFile): Promise<Buffer> {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+      throw new BadRequestException('仅支持 JPEG、PNG、WebP、GIF 图片');
+    }
     try {
-      await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    } catch (error) {
-      console.error('创建上传目录失败:', error);
+      const image = sharp(file.buffer, { limitInputPixels: 40_000_000, animated: false });
+      const metadata = await image.metadata();
+      if (!metadata.width || !metadata.height || !['jpeg', 'png', 'webp', 'gif'].includes(metadata.format ?? '')) {
+        throw new Error('unsupported image format');
+      }
+      return await image.rotate().jpeg({ quality: 90 }).toBuffer();
+    } catch {
+      throw new BadRequestException('图片内容无效或尺寸过大');
     }
   }
 
   private async safeUnlink(filePath: string) {
     try {
       await fs.unlink(filePath);
-    } catch (error) {
+    } catch {
       // 文件可能已不存在，忽略
     }
   }

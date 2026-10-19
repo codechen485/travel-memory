@@ -11,11 +11,11 @@
 
 《行囊》是一个前后端分离的全栈应用。用户可以创建**旅程**、上传**照片**、写**日记**、一键生成可翻阅的**电子旅行手帐**；还能对着一张照片，由 **AI 多模态识别画面场景**并生成三种风格的旅行文案；通过**灵感漂流**浏览、点赞、收藏他人公开的文案。
 
-- 🧳 **旅程档案馆** —— 旅程 CRUD、照片/日记、时间线、足迹地图、电子手帐、旅程封存
-- ✍️ **此刻文案** —— DeepSeek 多模态看图识景，一次生成「短句 / 叙事 / 诗意」三版本，可编辑保存
-- 🌊 **灵感漂流** —— 公开文案瀑布流、匿名展示、点赞、收藏（幂等）
-- 📊 **旅行统计** —— 总览 / 城市足迹 / 心情分布 / 每月旅程（ECharts + 城市级 Leaflet 地图）
-- 🔐 **认证鉴权** —— JWT 无状态登录、全局守卫、统一异常处理与响应格式
+- **旅程档案馆** —— 旅程 CRUD、照片/日记、时间线、足迹地图、电子手帐、旅程封存
+- **此刻文案** —— DeepSeek 多模态看图识景，一次生成「短句 / 叙事 / 诗意」三版本，可编辑保存
+- **灵感漂流** —— 公开文案瀑布流、匿名展示、点赞、收藏（幂等）
+- **旅行统计** —— 总览 / 城市足迹 / 心情分布 / 每月旅程（ECharts + 城市级 Leaflet 地图）
+- **认证鉴权** —— JWT 无状态登录、全局守卫、统一异常处理与响应格式
 
 ---
 
@@ -64,7 +64,8 @@ DeepSeek API（`deepseek-flash` 多模态）—— 单次调用完成「看图�
 cd backend-nestjs
 docker-compose up -d        # 起 PostgreSQL（+ Redis 可选）
 cp .env.example .env        # 按下文填写环境变量
-npx prisma db push          # 同步表结构
+# 将 JWT_SECRET 改为随机生成的至少 32 字符密钥（模板占位值不能启动后端）
+npx prisma migrate deploy   # 应用已提交的数据库迁移（仅新库；已有 db push 库先 baseline）
 npm install
 npm run start:dev           # 热重载启动
 ```
@@ -82,7 +83,9 @@ npm run dev                 # 默认读 .env.development，指向后端 3000
 | 变量 | 说明 |
 |------|------|
 | `DATABASE_URL` | PostgreSQL 连接串（docker-compose 默认已对应） |
-| `JWT_SECRET` / `JWT_EXPIRES_IN` | JWT 签名密钥 / 有效期（默认 24h） |
+| `JWT_SECRET` / `JWT_EXPIRES_IN` | 至少 32 字符的随机 JWT 密钥 / 有效期（默认 24h；未配置时后端拒绝启动） |
+| `FRONTEND_ORIGIN` | 允许的前端来源，多个来源用逗号分隔 |
+| `UPLOAD_DIR` | 上传文件目录；生产环境应指向持久卷 |
 | `DEEPSEEK_API_KEY` | AI 文案 Key（可选，留空则文案生成功能降级） |
 | `DEEPSEEK_MODEL` | 默认 `deepseek-flash`（多模态） |
 | `REDIS_HOST` / `REDIS_PORT` | Redis（可选，不起则缓存自动降级直查库） |
@@ -117,6 +120,7 @@ xingnang/
 
 - **[技术选用说明](docs/技术选用说明.md)** —— 每项技术选型的理由（适合面试准备）
 - **[后端 API 测试指南](backend-nestjs/API_TEST_GUIDE.md)** —— 全量接口清单与自测
+- **[安全加固与验证记录](docs/安全加固与验证记录.md)** —— JWT、签名图片、上传校验、迁移和测试说明
 - **[后端说明](backend-nestjs/README.md)** · **[前端说明](frontend/README.md)**
 
 ---

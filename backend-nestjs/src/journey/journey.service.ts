@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateJourneyDto } from './dto/create-journey.dto';
 import { UpdateJourneyDto } from './dto/update-journey.dto';
+import { removeUnreferencedUploads } from '../photo/storage-cleanup';
 
 @Injectable()
 export class JourneyService {
@@ -142,11 +143,19 @@ export class JourneyService {
    * 删除旅程（级联删除日记和照片记录）
    */
   async remove(userId: number, id: number) {
-    await this.getOwnedJourney(userId, id);
+    const journey = await this.prisma.journey.findFirst({
+      where: { id, userId },
+      include: { photos: { select: { originalUrl: true, thumbnailUrl: true } } },
+    });
+    if (!journey) throw new NotFoundException('旅程不存在');
 
     await this.prisma.journey.delete({
       where: { id },
     });
+    await removeUnreferencedUploads(this.prisma, [
+      ...(journey.photos ?? []).flatMap((photo) => [photo.originalUrl, photo.thumbnailUrl]),
+      ...(journey.coverImage ? [journey.coverImage] : []),
+    ]);
 
     return null;
   }
@@ -241,6 +250,9 @@ export class JourneyService {
 
     const fmt = (date: Date) =>
       `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+    const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[char] ?? char);
 
     const sections = journey.diaries
       .map((diary) => {
@@ -256,17 +268,17 @@ export class JourneyService {
         const photos = diary.photos
           .map(
             (photo) =>
-              `<img src="${photo.originalUrl}" alt="${diary.title}" />`,
+              `<img src="${escapeHtml(photo.originalUrl)}" alt="${escapeHtml(diary.title)}" />`,
           )
           .join('');
 
         return `<section class="diary">
           <div class="diary-photos">${photos}</div>
           <div class="diary-text">
-            <div class="diary-date">${fmt(diary.date)}${diary.mood ? ' · ' + (moodLabels[diary.mood] ?? diary.mood) : ''}${diary.locationName ? ' · ' + diary.locationName : ''}</div>
-            <h3>${diary.title}</h3>
-            <p>${plainText}</p>
-            ${copywriting ? `<blockquote>${copywriting.finalVersion}</blockquote>` : ''}
+            <div class="diary-date">${fmt(diary.date)}${diary.mood ? ' · ' + escapeHtml(moodLabels[diary.mood] ?? diary.mood) : ''}${diary.locationName ? ' · ' + escapeHtml(diary.locationName) : ''}</div>
+            <h3>${escapeHtml(diary.title)}</h3>
+            <p>${escapeHtml(plainText)}</p>
+            ${copywriting ? `<blockquote>${escapeHtml(copywriting.finalVersion)}</blockquote>` : ''}
           </div>
         </section>`;
       })
@@ -276,7 +288,7 @@ export class JourneyService {
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>${journey.title} · 电子手帐</title>
+<title>${escapeHtml(journey.title)} · 电子手帐</title>
 <style>
   body { font-family: "Source Han Sans", "Noto Sans SC", sans-serif; background: #f7f5f0; color: #3d3d3d; margin: 0; padding: 40px 20px; }
   .journal { max-width: 720px; margin: 0 auto; background: #fffdf7; border-radius: 8px; box-shadow: 0 10px 32px rgba(61,61,61,0.14); overflow: hidden; }
@@ -298,8 +310,8 @@ export class JourneyService {
 <body>
   <div class="journal">
     <div class="cover">
-      <h1>${journey.title}</h1>
-      <p>${destinations.join(' · ')}</p>
+      <h1>${escapeHtml(journey.title)}</h1>
+      <p>${escapeHtml(destinations.join(' · '))}</p>
       <p>${fmt(journey.startDate)} — ${fmt(journey.endDate)}</p>
     </div>
     <div class="stats"><span>${dayCount} 天</span><span>${journey.diaries.length} 篇日记</span><span>${photoCount} 张照片</span><span>${copywritings.length} 段文案</span></div>
